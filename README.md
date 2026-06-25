@@ -34,7 +34,9 @@ carousel.
 
 ## Public Hosting
 
-This app needs a Node server because browsers cannot reliably fetch and parse
+The app is currently deployed on https://dap-eret.onrender.com/
+
+Note: This app needs a Node server because browsers cannot reliably fetch and parse
 all arXiv resources directly from a static page. GitHub Pages alone is not
 enough for the full app. Deploy it to a Node-capable host such as Render,
 Railway, Fly.io, or Vercel.
