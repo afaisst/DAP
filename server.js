@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const publicDir = join(__dirname, "public");
 const port = Number(process.env.PORT || 4180);
+const host = process.env.HOST || "0.0.0.0";
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -195,6 +196,6 @@ const server = http.createServer((req, res) => {
   return handleStatic(req, res);
 });
 
-server.listen(port, "127.0.0.1", () => {
-  console.log(`DailyAstroPH running at http://127.0.0.1:${port}`);
+server.listen(port, host, () => {
+  console.log(`DailyAstroPH running at http://${host}:${port}`);
 });
