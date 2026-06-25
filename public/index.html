@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Daily AstroPH</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="topbar" aria-label="Paper controls">
+        <div>
+          <p class="eyebrow">arXiv astro-ph daily reader</p>
+          <h1>Daily AstroPH</h1>
+        </div>
+
+        <div class="controls">
+          <label class="field">
+            <span>Date</span>
+            <input id="dateInput" type="date">
+          </label>
+
+          <label class="field search-field">
+            <span>Search</span>
+            <input id="searchInput" type="search" placeholder="Title, author, abstract...">
+          </label>
+        </div>
+      </section>
+
+      <section class="status-row">
+        <div id="statusText">Loading papers...</div>
+        <button id="refreshButton" type="button" title="Refresh papers">Refresh</button>
+      </section>
+
+      <section id="topicList" class="topic-list" aria-live="polite"></section>
+    </main>
+
+    <template id="paperTemplate">
+      <article class="paper-card">
+        <div class="paper-header">
+          <div>
+            <a class="paper-title" target="_blank" rel="noreferrer"></a>
+            <p class="paper-meta"></p>
+          </div>
+          <div class="score-pill"></div>
+        </div>
+
+        <div class="paper-actions">
+          <button class="copy-link-button" type="button">Copy link</button>
+          <button class="figures-button" type="button">Figures</button>
+        </div>
+
+        <div class="authors"></div>
+
+        <details class="abstract-block">
+          <summary>Abstract</summary>
+          <p></p>
+        </details>
+      </article>
+    </template>
+
+    <dialog id="figureModal" class="figure-modal">
+      <div class="figure-modal-shell">
+        <div class="figure-modal-header">
+          <div>
+            <p class="modal-kicker">Paper figures</p>
+            <h2 id="figureModalTitle">Figures</h2>
+          </div>
+          <button id="figureCloseButton" class="icon-button" type="button" aria-label="Close figures">x</button>
+        </div>
+
+        <div id="figureStatus" class="figure-status"></div>
+
+        <div id="figureCarousel" class="figure-carousel" hidden>
+          <button id="prevFigureButton" class="carousel-button" type="button" aria-label="Previous figure">&lt;</button>
+          <figure class="figure-stage">
+            <img id="figureImage" alt="">
+            <figcaption id="figureCaption"></figcaption>
+          </figure>
+          <button id="nextFigureButton" class="carousel-button" type="button" aria-label="Next figure">&gt;</button>
+        </div>
+      </div>
+    </dialog>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
