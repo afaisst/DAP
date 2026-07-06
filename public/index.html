@@ -52,6 +52,7 @@
         <div class="paper-actions">
           <button class="copy-link-button" type="button">Copy link</button>
           <button class="figures-button" type="button">Figures</button>
+          <button class="summary-button" type="button">Summary</button>
         </div>
 
         <div class="authors"></div>
@@ -83,6 +84,20 @@
           </figure>
           <button id="nextFigureButton" class="carousel-button" type="button" aria-label="Next figure">&gt;</button>
         </div>
+      </div>
+    </dialog>
+
+    <dialog id="summaryModal" class="summary-modal">
+      <div class="summary-modal-shell">
+        <div class="summary-modal-header">
+          <div>
+            <p class="modal-kicker">Paper summary</p>
+            <h2 id="summaryModalTitle">Summary</h2>
+          </div>
+          <button id="summaryCloseButton" class="icon-button" type="button" aria-label="Close summary">x</button>
+        </div>
+
+        <ul id="summaryList" class="summary-list"></ul>
       </div>
     </dialog>
 

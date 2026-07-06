@@ -342,17 +342,31 @@ h1 {
   box-shadow: 0 22px 80px rgba(10, 20, 24, 0.28);
 }
 
-.figure-modal::backdrop {
+.summary-modal {
+  width: min(720px, calc(100vw - 28px));
+  max-height: min(760px, calc(100vh - 28px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  padding: 0;
+  box-shadow: 0 22px 80px rgba(10, 20, 24, 0.28);
+}
+
+.figure-modal::backdrop,
+.summary-modal::backdrop {
   background: rgba(10, 18, 22, 0.45);
 }
 
-.figure-modal-shell {
+.figure-modal-shell,
+.summary-modal-shell {
   display: grid;
   gap: 14px;
   padding: 18px;
 }
 
-.figure-modal-header {
+.figure-modal-header,
+.summary-modal-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
@@ -369,7 +383,8 @@ h1 {
   text-transform: uppercase;
 }
 
-.figure-modal h2 {
+.figure-modal h2,
+.summary-modal h2 {
   margin: 0;
   font-size: 1rem;
   line-height: 1.35;
@@ -383,6 +398,19 @@ h1 {
 .figure-status {
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.summary-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.summary-list li {
+  color: #3d484d;
+  line-height: 1.55;
+  padding-left: 4px;
 }
 
 .figure-carousel {

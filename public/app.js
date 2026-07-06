@@ -75,6 +75,10 @@ const figureImage = document.querySelector("#figureImage");
 const figureCaption = document.querySelector("#figureCaption");
 const prevFigureButton = document.querySelector("#prevFigureButton");
 const nextFigureButton = document.querySelector("#nextFigureButton");
+const summaryModal = document.querySelector("#summaryModal");
+const summaryModalTitle = document.querySelector("#summaryModalTitle");
+const summaryCloseButton = document.querySelector("#summaryCloseButton");
+const summaryList = document.querySelector("#summaryList");
 
 const figureState = {
   figures: [],
@@ -98,6 +102,7 @@ refreshButton.addEventListener("click", loadPapers);
 figureCloseButton.addEventListener("click", () => figureModal.close());
 prevFigureButton.addEventListener("click", () => showFigure(figureState.index - 1));
 nextFigureButton.addEventListener("click", () => showFigure(figureState.index + 1));
+summaryCloseButton.addEventListener("click", () => summaryModal.close());
 
 loadPapers();
 
@@ -234,6 +239,7 @@ function renderPaper(paper) {
   const abstract = node.querySelector(".abstract-block p");
   const copyButton = node.querySelector(".copy-link-button");
   const figuresButton = node.querySelector(".figures-button");
+  const summaryButton = node.querySelector(".summary-button");
 
   title.href = paper.url;
   title.textContent = paper.title;
@@ -241,6 +247,7 @@ function renderPaper(paper) {
   abstract.textContent = paper.abstract;
   copyButton.addEventListener("click", () => copyPaperLink(copyButton, paper.url));
   figuresButton.addEventListener("click", () => openFigureModal(paper));
+  summaryButton.addEventListener("click", () => openSummaryModal(paper));
   renderAuthors(authors, paper.authors);
 
   return node;
@@ -270,6 +277,107 @@ function renderCategoryFilters() {
 
     categoryFilters.appendChild(label);
   });
+}
+
+function openSummaryModal(paper) {
+  summaryModalTitle.textContent = paper.title;
+  summaryList.innerHTML = "";
+
+  buildSummaryBullets(paper).forEach((bullet) => {
+    const item = document.createElement("li");
+    item.textContent = bullet;
+    summaryList.appendChild(item);
+  });
+
+  summaryModal.showModal();
+}
+
+function buildSummaryBullets(paper) {
+  const sentences = splitSentences(paper.abstract);
+
+  if (!sentences.length) {
+    return ["No abstract text was available to summarize."];
+  }
+
+  const resultLike = sentences
+    .map((sentence, index) => ({
+      sentence,
+      index,
+      score: summarySentenceScore(sentence, index, sentences.length)
+    }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, 4)
+    .sort((a, b) => a.index - b.index)
+    .map((item) => trimSentence(item.sentence));
+
+  const bullets = [];
+  bullets.push(`Focus: ${trimSentence(paper.title)}`);
+
+  resultLike.forEach((sentence) => {
+    if (!bullets.includes(sentence)) {
+      bullets.push(sentence);
+    }
+  });
+
+  return bullets.slice(0, 5);
+}
+
+function splitSentences(text) {
+  return cleanText(text)
+    .split(/(?<=[.!?])\s+(?=[A-Z0-9])/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 28);
+}
+
+function summarySentenceScore(sentence, index, total) {
+  const lower = sentence.toLowerCase();
+  const positiveTerms = [
+    "we find",
+    "we show",
+    "we present",
+    "we demonstrate",
+    "we report",
+    "we reveal",
+    "results",
+    "suggest",
+    "indicate",
+    "consistent",
+    "evidence",
+    "conclude",
+    "contribution",
+    "measurement",
+    "constraint",
+    "imply"
+  ];
+  const setupTerms = ["we use", "we study", "we investigate", "we analyze", "we examine"];
+  let score = Math.max(0, total - index) * 0.12;
+
+  positiveTerms.forEach((term) => {
+    if (lower.includes(term)) {
+      score += 3;
+    }
+  });
+
+  setupTerms.forEach((term) => {
+    if (lower.includes(term)) {
+      score += 1.2;
+    }
+  });
+
+  if (/\b(first|new|novel|significant|robust|strong|high|low)\b/.test(lower)) {
+    score += 0.8;
+  }
+
+  if (sentence.length > 240) {
+    score -= 1;
+  }
+
+  return score;
+}
+
+function trimSentence(sentence) {
+  const cleaned = cleanText(sentence);
+  return cleaned.length > 260 ? `${cleaned.slice(0, 257).trim()}...` : cleaned;
 }
 
 async function copyPaperLink(button, url) {
