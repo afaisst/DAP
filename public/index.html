@@ -32,6 +32,11 @@
         <button id="refreshButton" type="button" title="Refresh papers">Refresh</button>
       </section>
 
+      <section class="category-filter-panel" aria-label="arXiv classification filters">
+        <div class="filter-heading">Classifications</div>
+        <div id="categoryFilters" class="category-filters"></div>
+      </section>
+
       <section id="topicList" class="topic-list" aria-live="polite"></section>
     </main>
 
@@ -42,7 +47,6 @@
             <a class="paper-title" target="_blank" rel="noreferrer"></a>
             <p class="paper-meta"></p>
           </div>
-          <div class="score-pill"></div>
         </div>
 
         <div class="paper-actions">

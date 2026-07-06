@@ -36,9 +36,18 @@ const topics = [
   }
 ];
 
+const astroPhCategories = [
+  { id: "astro-ph.CO", label: "Cosmology" },
+  { id: "astro-ph.GA", label: "Galaxies" },
+  { id: "astro-ph.HE", label: "High Energy" },
+  { id: "astro-ph.IM", label: "Instrumentation" },
+  { id: "astro-ph.SR", label: "Solar and Stellar" },
+  { id: "astro-ph.EP", label: "Earth and Planetary" }
+];
+
 const fallbackTopic = {
   id: "other",
-  label: "Other astro-ph",
+  label: "Other topics",
   terms: []
 };
 
@@ -46,11 +55,13 @@ const state = {
   papers: [],
   selectedDate: new Date().toISOString().slice(0, 10),
   search: "",
+  activeCategories: new Set(astroPhCategories.map((category) => category.id)),
   collapsedTopics: new Set([...topics.map((topic) => topic.id), fallbackTopic.id])
 };
 
 const dateInput = document.querySelector("#dateInput");
 const searchInput = document.querySelector("#searchInput");
+const categoryFilters = document.querySelector("#categoryFilters");
 const topicList = document.querySelector("#topicList");
 const statusText = document.querySelector("#statusText");
 const refreshButton = document.querySelector("#refreshButton");
@@ -71,6 +82,7 @@ const figureState = {
 };
 
 dateInput.value = state.selectedDate;
+renderCategoryFilters();
 
 dateInput.addEventListener("change", () => {
   state.selectedDate = dateInput.value;
@@ -158,7 +170,7 @@ function scorePaper(paper) {
 }
 
 function render() {
-  const filtered = state.papers.filter(matchesSearch);
+  const filtered = state.papers.filter(matchesCategoryFilter).filter(matchesSearch);
   const grouped = [...topics, fallbackTopic]
     .map((topic) => ({
       topic,
@@ -218,7 +230,6 @@ function renderPaper(paper) {
   const node = template.content.firstElementChild.cloneNode(true);
   const title = node.querySelector(".paper-title");
   const meta = node.querySelector(".paper-meta");
-  const score = node.querySelector(".score-pill");
   const authors = node.querySelector(".authors");
   const abstract = node.querySelector(".abstract-block p");
   const copyButton = node.querySelector(".copy-link-button");
@@ -227,13 +238,38 @@ function renderPaper(paper) {
   title.href = paper.url;
   title.textContent = paper.title;
   meta.textContent = `${formatDate(paper.published.slice(0, 10))} · ${paper.categories.join(", ") || "astro-ph"}`;
-  score.textContent = paper.relevance ? `Score ${paper.relevance}` : "Broad";
   abstract.textContent = paper.abstract;
   copyButton.addEventListener("click", () => copyPaperLink(copyButton, paper.url));
   figuresButton.addEventListener("click", () => openFigureModal(paper));
   renderAuthors(authors, paper.authors);
 
   return node;
+}
+
+function renderCategoryFilters() {
+  categoryFilters.innerHTML = "";
+
+  astroPhCategories.forEach((category) => {
+    const label = document.createElement("label");
+    label.className = "category-filter";
+    label.innerHTML = `
+      <input type="checkbox" value="${category.id}" checked>
+      <span>${category.id}</span>
+    `;
+
+    const checkbox = label.querySelector("input");
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) {
+        state.activeCategories.add(category.id);
+      } else {
+        state.activeCategories.delete(category.id);
+      }
+
+      render();
+    });
+
+    categoryFilters.appendChild(label);
+  });
 }
 
 async function copyPaperLink(button, url) {
@@ -338,7 +374,7 @@ function showFigure(index) {
   const figure = figureState.figures[figureState.index];
   figureImage.src = figure.src;
   figureImage.alt = figure.caption;
-  figureCaption.textContent = `${figureState.index + 1} of ${figureState.figures.length}. ${figure.caption}`;
+  figureCaption.textContent = figure.caption;
   prevFigureButton.disabled = figureState.figures.length < 2;
   nextFigureButton.disabled = figureState.figures.length < 2;
 }
@@ -395,6 +431,14 @@ function matchesSearch(paper) {
   return `${paper.title} ${paper.abstract} ${paper.authors.join(" ")} ${paper.categories.join(" ")}`
     .toLowerCase()
     .includes(state.search);
+}
+
+function matchesCategoryFilter(paper) {
+  if (!state.activeCategories.size) {
+    return false;
+  }
+
+  return paper.categories.some((category) => state.activeCategories.has(category));
 }
 
 function statusMessage(filteredCount, totalCount) {
