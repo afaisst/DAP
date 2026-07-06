@@ -56,7 +56,7 @@ const state = {
   selectedDate: new Date().toISOString().slice(0, 10),
   search: "",
   activeCategories: new Set(astroPhCategories.map((category) => category.id)),
-  collapsedTopics: new Set([...topics.map((topic) => topic.id), fallbackTopic.id])
+  activeTopicId: null
 };
 
 const dateInput = document.querySelector("#dateInput");
@@ -193,42 +193,53 @@ function render() {
   }
 
   topicList.innerHTML = "";
+
+  if (!grouped.some((group) => group.topic.id === state.activeTopicId)) {
+    state.activeTopicId = grouped[0].topic.id;
+  }
+
+  const topicButtons = document.createElement("section");
+  topicButtons.className = "topic-button-grid";
+  topicButtons.setAttribute("aria-label", "Topics");
+
   grouped.forEach((group) => {
-    const section = document.createElement("section");
-    section.className = "topic-section";
-    const gridId = `topic-grid-${group.topic.id}`;
-    const isCollapsed = state.collapsedTopics.has(group.topic.id);
-    section.innerHTML = `
-      <button class="topic-heading" type="button" aria-expanded="${String(!isCollapsed)}" aria-controls="${gridId}">
-        <span class="topic-title">
-          <span class="topic-chevron" aria-hidden="true"></span>
-          <span class="topic-name">${escapeHtml(group.topic.label)}</span>
-        </span>
-        <span class="topic-count">${group.papers.length} ${group.papers.length === 1 ? "paper" : "papers"}</span>
-      </button>
-      <div class="papers-grid" id="${gridId}" ${isCollapsed ? "hidden" : ""}></div>
+    const button = document.createElement("button");
+    const isActive = group.topic.id === state.activeTopicId;
+    button.className = "topic-tile";
+    button.dataset.topic = group.topic.id;
+    button.type = "button";
+    button.setAttribute("aria-pressed", String(isActive));
+    button.innerHTML = `
+      <span class="topic-name">${escapeHtml(group.topic.label)}</span>
+      <span class="topic-count">${group.papers.length}</span>
+      <span class="topic-count-label">${group.papers.length === 1 ? "paper" : "papers"}</span>
     `;
 
-    const grid = section.querySelector(".papers-grid");
-    const heading = section.querySelector(".topic-heading");
-    heading.addEventListener("click", () => toggleTopic(group.topic.id, heading, grid));
-    group.papers.forEach((paper) => grid.appendChild(renderPaper(paper)));
-    topicList.appendChild(section);
+    button.addEventListener("click", () => {
+      state.activeTopicId = group.topic.id;
+      render();
+    });
+
+    topicButtons.appendChild(button);
   });
-}
 
-function toggleTopic(topicId, heading, grid) {
-  const isCollapsed = state.collapsedTopics.has(topicId);
+  topicList.appendChild(topicButtons);
 
-  if (isCollapsed) {
-    state.collapsedTopics.delete(topicId);
-    heading.setAttribute("aria-expanded", "true");
-    grid.hidden = false;
-  } else {
-    state.collapsedTopics.add(topicId);
-    heading.setAttribute("aria-expanded", "false");
-    grid.hidden = true;
-  }
+  const activeGroup = grouped.find((group) => group.topic.id === state.activeTopicId);
+  const panel = document.createElement("section");
+  panel.className = "active-topic-panel";
+  panel.dataset.topic = activeGroup.topic.id;
+  panel.innerHTML = `
+    <div class="active-topic-heading">
+      <h2>${escapeHtml(activeGroup.topic.label)}</h2>
+      <span>${activeGroup.papers.length} ${activeGroup.papers.length === 1 ? "paper" : "papers"}</span>
+    </div>
+    <div class="papers-grid"></div>
+  `;
+
+  const grid = panel.querySelector(".papers-grid");
+  activeGroup.papers.forEach((paper) => grid.appendChild(renderPaper(paper)));
+  topicList.appendChild(panel);
 }
 
 function renderPaper(paper) {
@@ -259,6 +270,7 @@ function renderCategoryFilters() {
   astroPhCategories.forEach((category) => {
     const label = document.createElement("label");
     label.className = "category-filter";
+    label.dataset.category = category.id;
     label.innerHTML = `
       <input type="checkbox" value="${category.id}" checked>
       <span>${category.id}</span>
