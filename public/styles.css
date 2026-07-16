@@ -100,6 +100,32 @@ h1 {
   outline: 3px solid rgba(23, 107, 114, 0.18);
 }
 
+.date-control {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 42px;
+  gap: 6px;
+}
+
+.date-step-button {
+  min-width: 42px;
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 900;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.date-step-button:hover {
+  background: var(--accent-strong);
+}
+
+.date-step-button:active {
+  transform: translateY(1px);
+}
+
 .status-row {
   display: flex;
   justify-content: space-between;

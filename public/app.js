@@ -60,6 +60,8 @@ const state = {
 };
 
 const dateInput = document.querySelector("#dateInput");
+const prevDateButton = document.querySelector("#prevDateButton");
+const nextDateButton = document.querySelector("#nextDateButton");
 const searchInput = document.querySelector("#searchInput");
 const categoryFilters = document.querySelector("#categoryFilters");
 const topicList = document.querySelector("#topicList");
@@ -92,6 +94,9 @@ dateInput.addEventListener("change", () => {
   state.selectedDate = dateInput.value;
   loadPapers();
 });
+
+prevDateButton.addEventListener("click", () => shiftSelectedDate(-1));
+nextDateButton.addEventListener("click", () => shiftSelectedDate(1));
 
 searchInput.addEventListener("input", () => {
   state.search = searchInput.value.trim().toLowerCase();
@@ -126,6 +131,14 @@ async function loadPapers() {
     topicList.innerHTML = `<div class="empty error">Could not load papers. ${escapeHtml(error.message)}</div>`;
     setStatus("arXiv is unreachable from this local server right now.");
   }
+}
+
+function shiftSelectedDate(dayOffset) {
+  const date = new Date(`${state.selectedDate}T12:00:00`);
+  date.setDate(date.getDate() + dayOffset);
+  state.selectedDate = date.toISOString().slice(0, 10);
+  dateInput.value = state.selectedDate;
+  loadPapers();
 }
 
 function parseArxivFeed(xmlText) {

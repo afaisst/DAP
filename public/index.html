@@ -17,7 +17,11 @@
         <div class="controls">
           <label class="field">
             <span>Date</span>
-            <input id="dateInput" type="date">
+            <span class="date-control">
+              <button id="prevDateButton" class="date-step-button" type="button" aria-label="Previous day">&lt;</button>
+              <input id="dateInput" type="date">
+              <button id="nextDateButton" class="date-step-button" type="button" aria-label="Next day">&gt;</button>
+            </span>
           </label>
 
           <label class="field search-field">
