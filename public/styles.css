@@ -143,6 +143,8 @@ h1 {
 #refreshButton,
 .author-toggle,
 .paper-actions button,
+.share-menu summary,
+.share-options a,
 .icon-button,
 .carousel-button {
   border: 1px solid var(--line);
@@ -404,13 +406,17 @@ h1 {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: flex-start;
 }
 
-.paper-actions button {
+.paper-actions button,
+.share-menu summary,
+.share-options a {
   min-height: 32px;
   border-color: transparent;
   padding: 5px 10px;
   font-size: 0.84rem;
+  text-decoration: none;
 }
 
 .paper-actions .figures-button {
@@ -421,8 +427,50 @@ h1 {
   background: #6d5a96;
 }
 
-.paper-actions .copy-link-button {
+.share-menu summary {
   background: #176b72;
+  list-style: none;
+}
+
+.share-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.share-menu {
+  position: relative;
+}
+
+.share-menu[open] summary {
+  background: var(--accent-strong);
+}
+
+.share-options {
+  position: absolute;
+  z-index: 10;
+  display: grid;
+  gap: 6px;
+  min-width: 150px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  margin-top: 6px;
+  padding: 8px;
+}
+
+.share-options button,
+.share-options a {
+  display: block;
+  width: 100%;
+  background: #eef4f0;
+  color: var(--accent-strong);
+  text-align: left;
+}
+
+.share-options button:hover,
+.share-options a:hover {
+  background: var(--accent);
+  color: #ffffff;
 }
 
 .copy-fallback {

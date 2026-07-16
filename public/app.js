@@ -263,7 +263,12 @@ function renderPaper(paper) {
   const meta = node.querySelector(".paper-meta");
   const authors = node.querySelector(".authors");
   const abstract = node.querySelector(".abstract-block p");
+  const shareMenu = node.querySelector(".share-menu");
   const copyButton = node.querySelector(".copy-link-button");
+  const emailShareLink = node.querySelector(".email-share-link");
+  const xShareLink = node.querySelector(".x-share-link");
+  const facebookShareLink = node.querySelector(".facebook-share-link");
+  const linkedinShareLink = node.querySelector(".linkedin-share-link");
   const figuresButton = node.querySelector(".figures-button");
   const summaryButton = node.querySelector(".summary-button");
 
@@ -271,12 +276,24 @@ function renderPaper(paper) {
   title.textContent = paper.title;
   meta.textContent = `${formatDate(paper.published.slice(0, 10))} · ${paper.categories.join(", ") || "astro-ph"}`;
   abstract.textContent = paper.abstract;
-  copyButton.addEventListener("click", () => copyPaperLink(copyButton, paper.url));
+  copyButton.addEventListener("click", () => copyPaperLink(copyButton, paper.url, shareMenu));
+  setShareLinks(paper, { emailShareLink, xShareLink, facebookShareLink, linkedinShareLink });
   figuresButton.addEventListener("click", () => openFigureModal(paper));
   summaryButton.addEventListener("click", () => openSummaryModal(paper));
   renderAuthors(authors, paper.authors);
 
   return node;
+}
+
+function setShareLinks(paper, links) {
+  const encodedUrl = encodeURIComponent(paper.url);
+  const encodedTitle = encodeURIComponent(paper.title);
+  const encodedText = encodeURIComponent(`${paper.title} ${paper.url}`);
+
+  links.emailShareLink.href = `mailto:?subject=${encodedTitle}&body=${encodedText}`;
+  links.xShareLink.href = `https://twitter.com/intent/tweet?text=${encodedText}`;
+  links.facebookShareLink.href = `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`;
+  links.linkedinShareLink.href = `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`;
 }
 
 function renderCategoryFilters() {
@@ -408,7 +425,7 @@ function trimSentence(sentence) {
   return cleaned.length > 260 ? `${cleaned.slice(0, 257).trim()}...` : cleaned;
 }
 
-async function copyPaperLink(button, url) {
+async function copyPaperLink(button, url, shareMenu) {
   try {
     const copied = await copyText(url);
     if (!copied) {
@@ -418,6 +435,9 @@ async function copyPaperLink(button, url) {
 
     clearCopyFallback(button);
     button.textContent = "Copied";
+    window.setTimeout(() => {
+      shareMenu.open = false;
+    }, 500);
   } catch {
     showCopyFallback(button, url);
   }
