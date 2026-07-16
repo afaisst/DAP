@@ -108,6 +108,7 @@ figureCloseButton.addEventListener("click", () => figureModal.close());
 prevFigureButton.addEventListener("click", () => showFigure(figureState.index - 1));
 nextFigureButton.addEventListener("click", () => showFigure(figureState.index + 1));
 summaryCloseButton.addEventListener("click", () => summaryModal.close());
+window.addEventListener("mathjax-ready", () => typesetMath(document.body));
 
 loadPapers();
 
@@ -253,6 +254,7 @@ function render() {
   const grid = panel.querySelector(".papers-grid");
   activeGroup.papers.forEach((paper) => grid.appendChild(renderPaper(paper)));
   topicList.appendChild(panel);
+  typesetMath(topicList);
 }
 
 function renderPaper(paper) {
@@ -315,6 +317,7 @@ function openSummaryModal(paper) {
   });
 
   summaryModal.showModal();
+  typesetMath(summaryModal);
 }
 
 function buildSummaryBullets(paper) {
@@ -510,10 +513,22 @@ function showFigure(index) {
   figureCaption.textContent = figure.caption;
   prevFigureButton.disabled = figureState.figures.length < 2;
   nextFigureButton.disabled = figureState.figures.length < 2;
+  typesetMath(figureCaption);
 }
 
 function arxivIdFromUrl(url) {
   return url.split("/").pop() || "";
+}
+
+function typesetMath(root) {
+  if (!window.MathJax?.typesetPromise) {
+    return;
+  }
+
+  window.MathJax.typesetClear?.([root]);
+  window.MathJax.typesetPromise([root]).catch((error) => {
+    console.warn("MathJax typesetting failed", error);
+  });
 }
 
 function renderAuthors(container, authors) {
