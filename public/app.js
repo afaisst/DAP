@@ -47,12 +47,21 @@ const astroPhCategories = [
 
 const fallbackTopic = {
   id: "other",
-  label: "Other topics",
+  label: "Other astro-ph",
   terms: []
 };
 
+const favoriteTopic = {
+  id: "favorites",
+  label: "Favorites",
+  terms: []
+};
+
+const favoritesStorageKey = "daily-astro-ph:favorites";
+
 const state = {
   papers: [],
+  favorites: loadFavorites(),
   selectedDate: new Date().toISOString().slice(0, 10),
   search: "",
   activeCategories: new Set(astroPhCategories.map((category) => category.id)),
@@ -198,6 +207,14 @@ function render() {
         .sort((a, b) => b.relevance - a.relevance || new Date(b.published) - new Date(a.published))
     }))
     .filter((group) => group.papers.length);
+  const favoritePapers = getFavoritePapers();
+
+  if (favoritePapers.length) {
+    grouped.unshift({
+      topic: favoriteTopic,
+      papers: favoritePapers
+    });
+  }
 
   setStatus(statusMessage(filtered.length, state.papers.length));
 
@@ -269,6 +286,7 @@ function renderPaper(paper) {
   const xShareLink = node.querySelector(".x-share-link");
   const facebookShareLink = node.querySelector(".facebook-share-link");
   const linkedinShareLink = node.querySelector(".linkedin-share-link");
+  const favoriteButton = node.querySelector(".favorite-button");
   const figuresButton = node.querySelector(".figures-button");
   const summaryButton = node.querySelector(".summary-button");
 
@@ -276,6 +294,8 @@ function renderPaper(paper) {
   title.textContent = paper.title;
   meta.textContent = `${formatDate(paper.published.slice(0, 10))} · ${paper.categories.join(", ") || "astro-ph"}`;
   abstract.textContent = paper.abstract;
+  updateFavoriteButton(favoriteButton, paper);
+  favoriteButton.addEventListener("click", () => toggleFavorite(paper));
   copyButton.addEventListener("click", () => copyPaperLink(copyButton, paper.url, shareMenu));
   setShareLinks(paper, { emailShareLink, xShareLink, facebookShareLink, linkedinShareLink });
   figuresButton.addEventListener("click", () => openFigureModal(paper));
@@ -294,6 +314,80 @@ function setShareLinks(paper, links) {
   links.xShareLink.href = `https://twitter.com/intent/tweet?text=${encodedText}`;
   links.facebookShareLink.href = `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`;
   links.linkedinShareLink.href = `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`;
+}
+
+function loadFavorites() {
+  try {
+    const stored = localStorage.getItem(favoritesStorageKey);
+    const favorites = stored ? JSON.parse(stored) : [];
+    return Array.isArray(favorites) ? favorites.filter((paper) => paper && favoriteKey(paper)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveFavorites() {
+  try {
+    localStorage.setItem(favoritesStorageKey, JSON.stringify(state.favorites));
+  } catch {
+    setStatus("Could not save favorites in this browser session.");
+  }
+}
+
+function getFavoritePapers() {
+  return [...state.favorites].sort((a, b) => new Date(b.favoritedAt || b.published) - new Date(a.favoritedAt || a.published));
+}
+
+function favoriteKey(paper) {
+  return paper.id || paper.url;
+}
+
+function isFavorite(paper) {
+  const key = favoriteKey(paper);
+  return Boolean(key) && state.favorites.some((favorite) => favoriteKey(favorite) === key);
+}
+
+function toggleFavorite(paper) {
+  const key = favoriteKey(paper);
+
+  if (!key) {
+    return;
+  }
+
+  if (isFavorite(paper)) {
+    state.favorites = state.favorites.filter((favorite) => favoriteKey(favorite) !== key);
+  } else {
+    state.favorites = [toFavoritePaper(paper), ...state.favorites];
+  }
+
+  saveFavorites();
+  render();
+}
+
+function toFavoritePaper(paper) {
+  return {
+    id: paper.id,
+    title: paper.title,
+    authors: [...paper.authors],
+    abstract: paper.abstract,
+    published: paper.published,
+    updated: paper.updated,
+    categories: [...paper.categories],
+    url: paper.url,
+    topic: {
+      id: paper.topic?.id || fallbackTopic.id,
+      label: paper.topic?.label || fallbackTopic.label
+    },
+    relevance: paper.relevance || 0,
+    favoritedAt: new Date().toISOString()
+  };
+}
+
+function updateFavoriteButton(button, paper) {
+  const active = isFavorite(paper);
+  button.setAttribute("aria-pressed", String(active));
+  button.textContent = active ? "Starred" : "Star";
+  button.title = active ? "Remove from favorites" : "Add to favorites";
 }
 
 function renderCategoryFilters() {

@@ -427,6 +427,14 @@ h1 {
   background: #6d5a96;
 }
 
+.paper-actions .favorite-button {
+  background: #8b6a1d;
+}
+
+.paper-actions .favorite-button[aria-pressed="true"] {
+  background: #c08518;
+}
+
 .share-menu summary {
   background: #176b72;
   list-style: none;
@@ -539,6 +547,11 @@ h1 {
 .topic-tile[data-topic="large-scale-structure"],
 .active-topic-panel[data-topic="large-scale-structure"] {
   --tile-bg: #315f9a;
+}
+
+.topic-tile[data-topic="favorites"],
+.active-topic-panel[data-topic="favorites"] {
+  --tile-bg: #c08518;
 }
 
 .topic-tile[data-topic="reionization"],
