@@ -68,7 +68,7 @@ function parseFigureHtml(html, baseUrl) {
 }
 
 function cleanHtml(value) {
-  return value
+  return preserveMathText(value)
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
@@ -78,6 +78,25 @@ function cleanHtml(value) {
     .replace(/&#39;/g, "'")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function preserveMathText(value) {
+  return value.replace(/<math\b[^>]*\balttext=(["'])(.*?)\1[^>]*>[\s\S]*?<\/math>/gi, (_match, _quote, altText) => {
+    const tex = decodeHtmlEntities(altText)
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    return `$${tex}$`;
+  });
+}
+
+function decodeHtmlEntities(value) {
+  return value
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
 }
 
 async function handleFigures(req, res) {
@@ -98,7 +117,7 @@ async function handleFigures(req, res) {
     });
 
     if (!response.ok) {
-      throw new Error(`ar5iv returned HTTP ${response.status}`);
+      throw new Error(`arXiv HTML returned HTTP ${response.status}`);
     }
 
     const html = await response.text();
