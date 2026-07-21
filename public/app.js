@@ -207,7 +207,7 @@ function render() {
         .sort((a, b) => b.relevance - a.relevance || new Date(b.published) - new Date(a.published))
     }))
     .filter((group) => group.papers.length);
-  const favoritePapers = getFavoritePapers();
+  const favoritePapers = getFavoritePapers().filter(matchesSearch);
 
   if (favoritePapers.length) {
     grouped.unshift({
@@ -386,8 +386,9 @@ function toFavoritePaper(paper) {
 function updateFavoriteButton(button, paper) {
   const active = isFavorite(paper);
   button.setAttribute("aria-pressed", String(active));
-  button.textContent = active ? "Starred" : "Star";
+  button.textContent = active ? "★" : "☆";
   button.title = active ? "Remove from favorites" : "Add to favorites";
+  button.setAttribute("aria-label", active ? "Remove from favorites" : "Add to favorites");
 }
 
 function renderCategoryFilters() {
