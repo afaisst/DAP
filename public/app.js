@@ -61,11 +61,12 @@ const favoritesStorageKey = "daily-astro-ph:favorites";
 
 const state = {
   papers: [],
-  favorites: loadFavorites(),
+  favorites: [],
   selectedDate: new Date().toISOString().slice(0, 10),
   search: "",
   activeCategories: new Set(astroPhCategories.map((category) => category.id)),
-  activeTopicId: null
+  activeTopicId: null,
+  sessionUser: null
 };
 
 const dateInput = document.querySelector("#dateInput");
@@ -90,6 +91,16 @@ const summaryModal = document.querySelector("#summaryModal");
 const summaryModalTitle = document.querySelector("#summaryModalTitle");
 const summaryCloseButton = document.querySelector("#summaryCloseButton");
 const summaryList = document.querySelector("#summaryList");
+const authStatus = document.querySelector("#authStatus");
+const usernameInput = document.querySelector("#usernameInput");
+const passwordInput = document.querySelector("#passwordInput");
+const fullNameInput = document.querySelector("#fullNameInput");
+const orcidInput = document.querySelector("#orcidInput");
+const loginButton = document.querySelector("#loginButton");
+const signupButton = document.querySelector("#signupButton");
+const saveProfileButton = document.querySelector("#saveProfileButton");
+const logoutButton = document.querySelector("#logoutButton");
+const deleteAccountButton = document.querySelector("#deleteAccountButton");
 
 const figureState = {
   figures: [],
@@ -117,9 +128,26 @@ figureCloseButton.addEventListener("click", () => figureModal.close());
 prevFigureButton.addEventListener("click", () => showFigure(figureState.index - 1));
 nextFigureButton.addEventListener("click", () => showFigure(figureState.index + 1));
 summaryCloseButton.addEventListener("click", () => summaryModal.close());
+loginButton.addEventListener("click", () => submitAuth("/api/login"));
+signupButton.addEventListener("click", () => submitAuth("/api/signup"));
+saveProfileButton.addEventListener("click", saveProfile);
+logoutButton.addEventListener("click", logout);
+deleteAccountButton.addEventListener("click", deleteAccount);
+passwordInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    submitAuth("/api/login");
+  }
+});
 window.addEventListener("mathjax-ready", () => typesetMath(document.body));
 
-loadPapers();
+updateAuthUi();
+init();
+
+async function init() {
+  await loadSession();
+  await loadPapers();
+}
 
 async function loadPapers() {
   topicList.innerHTML = "";
@@ -156,7 +184,13 @@ function parseArxivFeed(xmlText) {
   const entries = [...doc.querySelectorAll("entry")];
 
   return entries.map((entry) => {
-    const authors = [...entry.querySelectorAll("author name")].map((node) => cleanText(node.textContent));
+    const authorNodes = [...entry.querySelectorAll("author")];
+    const authors = authorNodes
+      .map((node) => cleanText(node.querySelector("name")?.textContent || ""))
+      .filter(Boolean);
+    const authorOrcids = authorNodes
+      .map((node) => cleanText([...node.children].find((child) => child.localName === "orcid")?.textContent || ""))
+      .filter(Boolean);
     const categories = [...entry.querySelectorAll("category")].map((node) => node.getAttribute("term")).filter(Boolean);
     const links = [...entry.querySelectorAll("link")];
     const abstractUrl = links.find((link) => link.getAttribute("rel") === "alternate")?.getAttribute("href");
@@ -165,6 +199,7 @@ function parseArxivFeed(xmlText) {
       id: cleanText(entry.querySelector("id")?.textContent || ""),
       title: cleanText(entry.querySelector("title")?.textContent || ""),
       authors,
+      authorOrcids,
       abstract: cleanText(entry.querySelector("summary")?.textContent || ""),
       published: entry.querySelector("published")?.textContent || "",
       updated: entry.querySelector("updated")?.textContent || "",
@@ -294,6 +329,7 @@ function renderPaper(paper) {
   title.textContent = paper.title;
   meta.textContent = `${formatDate(paper.published.slice(0, 10))} · ${paper.categories.join(", ") || "astro-ph"}`;
   abstract.textContent = paper.abstract;
+  node.classList.toggle("paper-card--author-match", paperMatchesProfile(paper));
   updateFavoriteButton(favoriteButton, paper);
   favoriteButton.addEventListener("click", () => toggleFavorite(paper));
   copyButton.addEventListener("click", () => copyPaperLink(copyButton, paper.url, shareMenu));
@@ -316,7 +352,7 @@ function setShareLinks(paper, links) {
   links.linkedinShareLink.href = `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`;
 }
 
-function loadFavorites() {
+function loadLocalFavorites() {
   try {
     const stored = localStorage.getItem(favoritesStorageKey);
     const favorites = stored ? JSON.parse(stored) : [];
@@ -326,12 +362,214 @@ function loadFavorites() {
   }
 }
 
-function saveFavorites() {
+function saveLocalFavorites() {
   try {
     localStorage.setItem(favoritesStorageKey, JSON.stringify(state.favorites));
+    return true;
   } catch {
     setStatus("Could not save favorites in this browser session.");
+    return false;
   }
+}
+
+async function loadSession() {
+  try {
+    const response = await fetch("/api/session");
+    const data = await response.json();
+    state.sessionUser = data.user || null;
+
+    if (state.sessionUser) {
+      await loadRemoteFavorites(true);
+    } else {
+      state.favorites = loadLocalFavorites();
+    }
+  } catch {
+    state.sessionUser = null;
+    state.favorites = loadLocalFavorites();
+  }
+
+  updateAuthUi();
+}
+
+async function submitAuth(endpoint) {
+  const username = usernameInput.value.trim();
+  const password = passwordInput.value;
+
+  if (!username || !password) {
+    authStatus.textContent = "Enter a username and password to continue.";
+    return;
+  }
+
+  setAuthButtonsDisabled(true);
+  authStatus.textContent = endpoint === "/api/signup" ? "Creating local account..." : "Logging in...";
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Could not authenticate.");
+    }
+
+    state.sessionUser = data.user;
+    passwordInput.value = "";
+    await loadRemoteFavorites(true);
+    updateAuthUi();
+    render();
+  } catch (error) {
+    authStatus.textContent = error.message;
+  } finally {
+    setAuthButtonsDisabled(false);
+  }
+}
+
+async function logout() {
+  logoutButton.disabled = true;
+
+  try {
+    await fetch("/api/logout", { method: "POST" });
+  } catch {
+    // Keep the UI moving even if the local server drops the response.
+  }
+
+  state.sessionUser = null;
+  state.favorites = loadLocalFavorites();
+  passwordInput.value = "";
+  updateAuthUi();
+  render();
+  logoutButton.disabled = false;
+}
+
+async function saveProfile() {
+  if (!state.sessionUser) {
+    return;
+  }
+
+  saveProfileButton.disabled = true;
+  authStatus.textContent = "Saving profile...";
+
+  try {
+    const response = await fetch("/api/profile", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        fullName: fullNameInput.value.trim(),
+        orcid: orcidInput.value.trim()
+      })
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Could not save profile.");
+    }
+
+    state.sessionUser = data.user;
+    updateAuthUi();
+    render();
+  } catch (error) {
+    authStatus.textContent = error.message;
+  } finally {
+    saveProfileButton.disabled = false;
+  }
+}
+
+async function deleteAccount() {
+  if (!state.sessionUser) {
+    return;
+  }
+
+  const confirmed = window.confirm("Delete this account and all saved data from the local server? This cannot be undone.");
+
+  if (!confirmed) {
+    return;
+  }
+
+  deleteAccountButton.disabled = true;
+  authStatus.textContent = "Deleting account...";
+
+  try {
+    const response = await fetch("/api/account", { method: "DELETE" });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Could not delete account.");
+    }
+
+    state.sessionUser = null;
+    state.favorites = loadLocalFavorites();
+    passwordInput.value = "";
+    fullNameInput.value = "";
+    orcidInput.value = "";
+    updateAuthUi();
+    render();
+  } catch (error) {
+    authStatus.textContent = error.message;
+  } finally {
+    deleteAccountButton.disabled = false;
+  }
+}
+
+async function loadRemoteFavorites(mergeLocal = false) {
+  const response = await fetch("/api/favorites");
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Could not load account favorites.");
+  }
+
+  const remoteFavorites = Array.isArray(data.favorites) ? data.favorites : [];
+  const localFavorites = mergeLocal ? loadLocalFavorites() : [];
+  const mergedFavorites = mergeFavorites(remoteFavorites, localFavorites);
+  state.favorites = mergedFavorites;
+
+  if (mergedFavorites.length !== remoteFavorites.length) {
+    await saveRemoteFavorites(mergedFavorites);
+  }
+}
+
+async function saveRemoteFavorites(favorites = state.favorites) {
+  const response = await fetch("/api/favorites", {
+    method: "PUT",
+    headers: {
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ favorites })
+  });
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Could not save account favorites.");
+  }
+
+  state.favorites = Array.isArray(data.favorites) ? data.favorites : favorites;
+  return true;
+}
+
+function mergeFavorites(primaryFavorites, secondaryFavorites) {
+  const merged = [];
+  const seen = new Set();
+
+  [...primaryFavorites, ...secondaryFavorites].forEach((paper) => {
+    const normalized = toFavoritePaper(paper);
+    const key = favoriteKey(normalized);
+
+    if (!key || seen.has(key)) {
+      return;
+    }
+
+    seen.add(key);
+    merged.push(normalized);
+  });
+
+  return merged;
 }
 
 function getFavoritePapers() {
@@ -347,12 +585,14 @@ function isFavorite(paper) {
   return Boolean(key) && state.favorites.some((favorite) => favoriteKey(favorite) === key);
 }
 
-function toggleFavorite(paper) {
+async function toggleFavorite(paper) {
   const key = favoriteKey(paper);
 
   if (!key) {
     return;
   }
+
+  const previousFavorites = [...state.favorites];
 
   if (isFavorite(paper)) {
     state.favorites = state.favorites.filter((favorite) => favoriteKey(favorite) !== key);
@@ -360,8 +600,19 @@ function toggleFavorite(paper) {
     state.favorites = [toFavoritePaper(paper), ...state.favorites];
   }
 
-  saveFavorites();
   render();
+
+  try {
+    if (state.sessionUser) {
+      await saveRemoteFavorites();
+    } else {
+      saveLocalFavorites();
+    }
+  } catch (error) {
+    state.favorites = previousFavorites;
+    render();
+    setStatus(error.message);
+  }
 }
 
 function toFavoritePaper(paper) {
@@ -369,6 +620,7 @@ function toFavoritePaper(paper) {
     id: paper.id,
     title: paper.title,
     authors: [...paper.authors],
+    authorOrcids: [...(paper.authorOrcids || [])],
     abstract: paper.abstract,
     published: paper.published,
     updated: paper.updated,
@@ -389,6 +641,56 @@ function updateFavoriteButton(button, paper) {
   button.textContent = active ? "★" : "☆";
   button.title = active ? "Remove from favorites" : "Add to favorites";
   button.setAttribute("aria-label", active ? "Remove from favorites" : "Add to favorites");
+}
+
+function updateAuthUi() {
+  const loggedIn = Boolean(state.sessionUser);
+  usernameInput.hidden = loggedIn;
+  passwordInput.hidden = loggedIn;
+  fullNameInput.hidden = !loggedIn;
+  orcidInput.hidden = !loggedIn;
+  loginButton.hidden = loggedIn;
+  signupButton.hidden = loggedIn;
+  saveProfileButton.hidden = !loggedIn;
+  logoutButton.hidden = !loggedIn;
+  deleteAccountButton.hidden = !loggedIn;
+
+  if (loggedIn) {
+    authStatus.textContent = `Signed in as ${state.sessionUser.username}. Favorites now sync to this local server.`;
+    usernameInput.value = state.sessionUser.username;
+    fullNameInput.value = state.sessionUser.fullName || "";
+    orcidInput.value = state.sessionUser.orcid || "";
+  } else {
+    authStatus.textContent = "Anonymous mode. Favorites stay in this browser until you log in.";
+    usernameInput.value = "";
+    fullNameInput.value = "";
+    orcidInput.value = "";
+  }
+}
+
+function setAuthButtonsDisabled(disabled) {
+  usernameInput.disabled = disabled;
+  passwordInput.disabled = disabled;
+  loginButton.disabled = disabled;
+  signupButton.disabled = disabled;
+}
+
+function paperMatchesProfile(paper) {
+  if (!state.sessionUser) {
+    return false;
+  }
+
+  const fullName = normalizePersonName(state.sessionUser.fullName || "");
+  const paperAuthors = paper.authors.map(normalizePersonName);
+
+  if (fullName && paperAuthors.some((author) => samePersonName(author, fullName))) {
+    return true;
+  }
+
+  const profileOrcid = normalizeOrcid(state.sessionUser.orcid || "");
+  const paperOrcids = (paper.authorOrcids || []).map(normalizeOrcid);
+
+  return Boolean(profileOrcid) && paperOrcids.includes(profileOrcid);
 }
 
 function renderCategoryFilters() {
@@ -734,6 +1036,33 @@ function formatDate(value) {
 
 function cleanText(value) {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function normalizePersonName(value) {
+  return cleanText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function samePersonName(left, right) {
+  if (!left || !right) {
+    return false;
+  }
+
+  if (left === right) {
+    return true;
+  }
+
+  return left.length > 6 && right.length > 6 && (left.includes(right) || right.includes(left));
+}
+
+function normalizeOrcid(value) {
+  return cleanText(value)
+    .toUpperCase()
+    .replace(/^HTTPS?:\/\/ORCID\.ORG\//, "")
+    .replace(/[^0-9X]/g, "");
 }
 
 function escapeRegExp(value) {

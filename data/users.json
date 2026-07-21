@@ -1,0 +1,66 @@
+{
+  "users": [
+    {
+      "username": "afaisst",
+      "usernameKey": "afaisst",
+      "passwordSalt": "5daac0216b5fa04057b1ee8b4fa35ffb",
+      "passwordHash": "74d91d6a1b87a05e43b33af74b28ebe7ef7591a7388873af049c827fceb6f3cf2330b46425098f8c6b276806296df8e598ddbbd3c28875cb4d75ae5849d7c63d",
+      "fullName": "Andreas L. Faisst",
+      "orcid": "0000-0002-9382-9832",
+      "favorites": [
+        {
+          "id": "http://arxiv.org/abs/2607.16700v1",
+          "title": "Asymmetries in spatially unresolved 21-cm emission line profiles of isolated galaxies",
+          "authors": [
+            "Aditya Manuwal",
+            "H. M. Hernández-Toledo",
+            "J. A. Vázquez-Mata",
+            "Diana Serrato Barrajas",
+            "Aldo Rodríguez-Puebla",
+            "Vladimir Ávila-Reese",
+            "A. R. Calette"
+          ],
+          "abstract": "The origin of asymmetry in the ${\\rm H}\\,{\\scriptsize{\\rm I}}$ of galaxies remains an elusive problem, largely due to the difficulties associated with distinguishing between its secular and external contributors. We have compiled a sample of local isolated galaxies from the UNAM-KIAS and the latest AMIGA samples with near-complete beam coverage and robust estimates of ${\\rm H}\\,{\\scriptsize{\\rm I}}$ line asymmetry. The ${\\rm H}\\,{\\scriptsize{\\rm I}}$ measurements are based on single-dish spectra sourced from five surveys: ${\\rm H}\\,{\\scriptsize{\\rm I}}$-MaNGA, NIBLES, KLUN, ALFALFA, and xGASS. Our galaxies tend to be late-type, star-forming centrals at all masses but exhibit slightly lower specific star formation rates (sSFRs) and higher ${\\rm H}\\,{\\scriptsize{\\rm I}}$ contents than expected. The latter is likely driven by lower star formation efficiency, weaker outflows, and additionally, higher accretion rate of gas onto the galaxy at $M_\\star\\lesssim 10^{10.3}\\,\\mathrm{M}_\\odot$. AMIGA, however, shows systematically higher ${\\rm H}\\,{\\scriptsize{\\rm I}}$ masses than UNAM-KIAS, which we attribute to higher local densities probed by the latter. Furthermore, both samples show bar frequencies similar to normal spirals, indicating that the gravitational instabilities leading to bars predominantly stem from internal processes, as suggested by recent works. Our galaxies show unexpectedly high merger fractions, possibly due to sampling bias and/or the inability of the classification method to distinguish between flybys and encounters leading to coalescence. We also find higher sSFRs for asymmetric galaxies below $M_\\star\\sim 10^{10.3}\\,\\mathrm{M}_\\odot$, in agreement with the predictions for centrals from the ${\\scriptsize{\\rm EAGLE}}$ simulation. We release the ${\\rm H}\\,{\\scriptsize{\\rm I}}$ measurements along with ancillary galaxy and halo properties for public use.",
+          "published": "2026-07-18T08:23:42Z",
+          "updated": "2026-07-18T08:23:42Z",
+          "categories": [
+            "astro-ph.GA"
+          ],
+          "url": "https://arxiv.org/abs/2607.16700v1",
+          "topic": {
+            "id": "galaxies",
+            "label": "Galaxies"
+          },
+          "relevance": 11,
+          "favoritedAt": "2026-07-21T16:21:05.362Z"
+        },
+        {
+          "id": "http://arxiv.org/abs/2607.16664v1",
+          "title": "Tidal Structures Around Edge-On Galaxies in Deep Imaging Surveys",
+          "authors": [
+            "Kyle R. Adams",
+            "Aleksandr Mosenkov",
+            "Jonah Seguine",
+            "Lydia Stacey",
+            "Thea Spigarelli",
+            "Jonah George"
+          ],
+          "abstract": "We present a statistical study of low-surface-brightness (LSB) tidal structures in two large samples of edge-on disk galaxies. Our primary sample comprises 5606 galaxies from the Edge-on Galaxies In SDSS (EGIS) catalog, analyzed using imaging from the DESI Legacy Imaging Surveys, supplemented by Hyper Suprime-Cam Subaru Strategic Program (HSC-SSP) data and deep Apache Point Observatory (APO) follow-up observations for selected objects. To assess the robustness of our results, we also examine an independent sample of 14,237 galaxies from the Edge-on Galaxies in the Pan-STARRS survey (EGIPS) catalog. All images were processed using a homogeneous procedure optimized for the detection of faint diffuse emission. Tidal structures were identified through visual inspection and classified into established morphological categories, with careful treatment of imaging artifacts and galactic cirrus contamination. We detected tidal features in 324 EGIS galaxies and 690 EGIPS galaxies, corresponding to incidence rates of 5.8% and 4.8%, respectively. Restricting the analysis to completeness-limited subsamples yields consistent fractions of 6.4% and 6.2%. At a typical DESI $r$-band surface-brightness depth of 28.6 mag arcsec$^{-2}$ these values are consistent with previous observational studies but lower than predictions from many cosmological simulations. Recent high-resolution simulations, however, produce incidence rates much closer to those measured here, suggesting that numerical resolution, realistic modeling of observational and instrumental effects, and galaxy formation physics are all critical for accurately predicting the abundance of LSB tidal structures.",
+          "published": "2026-07-18T06:39:22Z",
+          "updated": "2026-07-18T06:39:22Z",
+          "categories": [
+            "astro-ph.GA"
+          ],
+          "url": "https://arxiv.org/abs/2607.16664v1",
+          "topic": {
+            "id": "galaxies",
+            "label": "Galaxies"
+          },
+          "relevance": 12,
+          "favoritedAt": "2026-07-21T16:21:03.855Z"
+        }
+      ],
+      "createdAt": "2026-07-21T06:00:55.731Z"
+    }
+  ]
+}

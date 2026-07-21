@@ -1,12 +1,19 @@
 import http from "node:http";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const publicDir = join(__dirname, "public");
+const dataDir = join(__dirname, "data");
+const usersFile = join(dataDir, "users.json");
 const port = Number(process.env.PORT || 4180);
 const host = process.env.HOST || "0.0.0.0";
+const sessionCookieName = "dap_session";
+const sessionMaxAgeSeconds = 60 * 60 * 24 * 30;
+const sessions = new Map();
+let userStoreWrite = Promise.resolve();
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -15,12 +22,396 @@ const mimeTypes = {
   ".json": "application/json; charset=utf-8"
 };
 
-function json(res, status, body) {
+function json(res, status, body, headers = {}) {
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
-    "cache-control": "public, max-age=900"
+    "cache-control": "no-store",
+    ...headers
   });
   res.end(JSON.stringify(body));
+}
+
+function cookies(req) {
+  const header = req.headers.cookie || "";
+  return header.split(/;\s*/).reduce((result, pair) => {
+    if (!pair) {
+      return result;
+    }
+
+    const index = pair.indexOf("=");
+
+    if (index === -1) {
+      return result;
+    }
+
+    const key = decodeURIComponent(pair.slice(0, index));
+    const value = decodeURIComponent(pair.slice(index + 1));
+    result[key] = value;
+    return result;
+  }, {});
+}
+
+function setCookie(res, name, value, options = {}) {
+  const parts = [`${encodeURIComponent(name)}=${encodeURIComponent(value)}`];
+
+  if (options.maxAge != null) {
+    parts.push(`Max-Age=${options.maxAge}`);
+  }
+
+  parts.push(`Path=${options.path || "/"}`);
+  parts.push("HttpOnly");
+  parts.push("SameSite=Lax");
+  res.setHeader("set-cookie", parts.join("; "));
+}
+
+function clearCookie(res, name) {
+  setCookie(res, name, "", { maxAge: 0, path: "/" });
+}
+
+function createSession(username) {
+  const token = randomBytes(24).toString("hex");
+  sessions.set(token, {
+    username,
+    expiresAt: Date.now() + sessionMaxAgeSeconds * 1000
+  });
+  return token;
+}
+
+function getSession(req) {
+  const token = cookies(req)[sessionCookieName];
+
+  if (!token) {
+    return null;
+  }
+
+  const session = sessions.get(token);
+
+  if (!session) {
+    return null;
+  }
+
+  if (session.expiresAt < Date.now()) {
+    sessions.delete(token);
+    return null;
+  }
+
+  return { token, ...session };
+}
+
+function deleteSession(token) {
+  if (token) {
+    sessions.delete(token);
+  }
+}
+
+function normalizeUsername(value) {
+  return value.trim().toLowerCase();
+}
+
+function hashPassword(password, salt) {
+  return scryptSync(password, salt, 64).toString("hex");
+}
+
+function verifyPassword(password, salt, passwordHash) {
+  const hashed = Buffer.from(hashPassword(password, salt), "hex");
+  const stored = Buffer.from(passwordHash, "hex");
+
+  return hashed.length === stored.length && timingSafeEqual(hashed, stored);
+}
+
+async function readJsonBody(req) {
+  const chunks = [];
+
+  for await (const chunk of req) {
+    chunks.push(chunk);
+  }
+
+  const raw = Buffer.concat(chunks).toString("utf-8");
+
+  if (!raw) {
+    return {};
+  }
+
+  return JSON.parse(raw);
+}
+
+async function readUserStore() {
+  try {
+    const raw = await readFile(usersFile, "utf-8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed?.users) ? parsed : { users: [] };
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return { users: [] };
+    }
+
+    throw error;
+  }
+}
+
+async function writeUserStore(store) {
+  userStoreWrite = userStoreWrite.then(async () => {
+    await mkdir(dataDir, { recursive: true });
+    await writeFile(usersFile, `${JSON.stringify(store, null, 2)}\n`, "utf-8");
+  });
+  return userStoreWrite;
+}
+
+function sanitizeFavoritePaper(paper) {
+  const favoriteId = typeof paper?.id === "string" ? paper.id.trim() : "";
+  const title = typeof paper?.title === "string" ? paper.title.trim() : "";
+  const abstract = typeof paper?.abstract === "string" ? paper.abstract.trim() : "";
+  const published = typeof paper?.published === "string" ? paper.published : "";
+  const updated = typeof paper?.updated === "string" ? paper.updated : "";
+  const url = typeof paper?.url === "string" ? paper.url.trim() : "";
+  const topicId = typeof paper?.topic?.id === "string" ? paper.topic.id.trim() : "other";
+  const topicLabel = typeof paper?.topic?.label === "string" ? paper.topic.label.trim() : "Other astro-ph";
+
+  if (!favoriteId || !title || !url) {
+    return null;
+  }
+
+  return {
+    id: favoriteId,
+    title,
+    authors: Array.isArray(paper.authors) ? paper.authors.filter((author) => typeof author === "string").slice(0, 40) : [],
+    abstract,
+    published,
+    updated,
+    categories: Array.isArray(paper.categories) ? paper.categories.filter((category) => typeof category === "string").slice(0, 20) : [],
+    url,
+    topic: {
+      id: topicId || "other",
+      label: topicLabel || "Other astro-ph"
+    },
+    relevance: Number.isFinite(Number(paper.relevance)) ? Number(paper.relevance) : 0,
+    favoritedAt: typeof paper?.favoritedAt === "string" && paper.favoritedAt ? paper.favoritedAt : new Date().toISOString()
+  };
+}
+
+function sanitizeProfileFields(payload) {
+  const fullName = typeof payload?.fullName === "string" ? payload.fullName.trim().slice(0, 120) : "";
+  const orcid = typeof payload?.orcid === "string"
+    ? payload.orcid.trim().replace(/^https?:\/\/orcid\.org\//i, "").replace(/[^0-9X-]/gi, "").slice(0, 19)
+    : "";
+
+  return {
+    fullName,
+    orcid
+  };
+}
+
+function serializeUser(user) {
+  return {
+    username: user.username,
+    fullName: user.fullName || "",
+    orcid: user.orcid || ""
+  };
+}
+
+function deleteSessionsForUsername(username) {
+  for (const [token, session] of sessions.entries()) {
+    if (session.username === username) {
+      sessions.delete(token);
+    }
+  }
+}
+
+async function getUserFromSession(req, res) {
+  const session = getSession(req);
+
+  if (!session) {
+    json(res, 401, { error: "Please log in first." });
+    return null;
+  }
+
+  const store = await readUserStore();
+  const user = store.users.find((entry) => entry.username === session.username);
+
+  if (!user) {
+    clearCookie(res, sessionCookieName);
+    deleteSession(session.token);
+    json(res, 401, { error: "Session user no longer exists." });
+    return null;
+  }
+
+  return { session, store, user };
+}
+
+async function handleSession(req, res) {
+  const session = getSession(req);
+
+  if (!session) {
+    return json(res, 200, { user: null });
+  }
+
+  const store = await readUserStore();
+  const user = store.users.find((entry) => entry.username === session.username);
+
+  if (!user) {
+    clearCookie(res, sessionCookieName);
+    deleteSession(session.token);
+    return json(res, 200, { user: null });
+  }
+
+  return json(res, 200, { user: serializeUser(user) });
+}
+
+async function handleSignup(req, res) {
+  let payload;
+
+  try {
+    payload = await readJsonBody(req);
+  } catch {
+    return json(res, 400, { error: "Invalid JSON body." });
+  }
+
+  const username = typeof payload.username === "string" ? payload.username.trim() : "";
+  const password = typeof payload.password === "string" ? payload.password : "";
+  const usernameKey = normalizeUsername(username);
+
+  if (!/^[a-zA-Z0-9_-]{3,24}$/.test(username)) {
+    return json(res, 400, { error: "Username must be 3-24 characters and use letters, numbers, underscores, or hyphens." });
+  }
+
+  if (password.length < 6) {
+    return json(res, 400, { error: "Password must be at least 6 characters long." });
+  }
+
+  const store = await readUserStore();
+
+  if (store.users.some((user) => user.usernameKey === usernameKey)) {
+    return json(res, 409, { error: "That username already exists." });
+  }
+
+  const salt = randomBytes(16).toString("hex");
+  store.users.push({
+    username,
+    usernameKey,
+    passwordSalt: salt,
+    passwordHash: hashPassword(password, salt),
+    fullName: "",
+    orcid: "",
+    favorites: [],
+    createdAt: new Date().toISOString()
+  });
+  await writeUserStore(store);
+
+  const createdUser = store.users[store.users.length - 1];
+  const token = createSession(username);
+  setCookie(res, sessionCookieName, token, { maxAge: sessionMaxAgeSeconds });
+  return json(res, 201, { user: serializeUser(createdUser) });
+}
+
+async function handleLogin(req, res) {
+  let payload;
+
+  try {
+    payload = await readJsonBody(req);
+  } catch {
+    return json(res, 400, { error: "Invalid JSON body." });
+  }
+
+  const username = typeof payload.username === "string" ? payload.username.trim() : "";
+  const password = typeof payload.password === "string" ? payload.password : "";
+  const usernameKey = normalizeUsername(username);
+  const store = await readUserStore();
+  const user = store.users.find((entry) => entry.usernameKey === usernameKey);
+
+  if (!user || !verifyPassword(password, user.passwordSalt, user.passwordHash)) {
+    return json(res, 401, { error: "Incorrect username or password." });
+  }
+
+  const token = createSession(user.username);
+  setCookie(res, sessionCookieName, token, { maxAge: sessionMaxAgeSeconds });
+  return json(res, 200, { user: serializeUser(user) });
+}
+
+async function handleLogout(req, res) {
+  deleteSession(getSession(req)?.token);
+  clearCookie(res, sessionCookieName);
+  return json(res, 200, { ok: true });
+}
+
+async function handleFavorites(req, res) {
+  const auth = await getUserFromSession(req, res);
+
+  if (!auth) {
+    return;
+  }
+
+  const { store, user } = auth;
+
+  if (req.method === "GET") {
+    return json(res, 200, { favorites: Array.isArray(user.favorites) ? user.favorites : [] });
+  }
+
+  if (req.method === "PUT") {
+    let payload;
+
+    try {
+      payload = await readJsonBody(req);
+    } catch {
+      return json(res, 400, { error: "Invalid JSON body." });
+    }
+
+    if (!Array.isArray(payload.favorites)) {
+      return json(res, 400, { error: "Expected a favorites array." });
+    }
+
+    user.favorites = payload.favorites
+      .map(sanitizeFavoritePaper)
+      .filter(Boolean)
+      .slice(0, 500);
+    await writeUserStore(store);
+    return json(res, 200, { favorites: user.favorites });
+  }
+
+  return json(res, 405, { error: "Method not allowed." });
+}
+
+async function handleProfile(req, res) {
+  const auth = await getUserFromSession(req, res);
+
+  if (!auth) {
+    return;
+  }
+
+  if (req.method !== "PUT") {
+    return json(res, 405, { error: "Method not allowed." });
+  }
+
+  let payload;
+
+  try {
+    payload = await readJsonBody(req);
+  } catch {
+    return json(res, 400, { error: "Invalid JSON body." });
+  }
+
+  const { fullName, orcid } = sanitizeProfileFields(payload);
+  auth.user.fullName = fullName;
+  auth.user.orcid = orcid;
+  await writeUserStore(auth.store);
+  return json(res, 200, { user: serializeUser(auth.user) });
+}
+
+async function handleDeleteAccount(req, res) {
+  const auth = await getUserFromSession(req, res);
+
+  if (!auth) {
+    return;
+  }
+
+  if (req.method !== "DELETE") {
+    return json(res, 405, { error: "Method not allowed." });
+  }
+
+  auth.store.users = auth.store.users.filter((entry) => entry.username !== auth.user.username);
+  await writeUserStore(auth.store);
+  deleteSessionsForUsername(auth.user.username);
+  clearCookie(res, sessionCookieName);
+  return json(res, 200, { ok: true });
 }
 
 function dateToArxivBounds(dateValue) {
@@ -122,7 +513,9 @@ async function handleFigures(req, res) {
 
     const html = await response.text();
     const figures = parseFigureHtml(html, htmlUrl);
-    json(res, 200, { id, source: htmlUrl, figures });
+    json(res, 200, { id, source: htmlUrl, figures }, {
+      "cache-control": "public, max-age=900"
+    });
   } catch (error) {
     json(res, 502, {
       error: "Could not load figures for this paper.",
@@ -181,6 +574,40 @@ async function handleApi(req, res) {
   }
 }
 
+async function handleAuth(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  if (url.pathname === "/api/session" && req.method === "GET") {
+    return handleSession(req, res);
+  }
+
+  if (url.pathname === "/api/signup" && req.method === "POST") {
+    return handleSignup(req, res);
+  }
+
+  if (url.pathname === "/api/login" && req.method === "POST") {
+    return handleLogin(req, res);
+  }
+
+  if (url.pathname === "/api/logout" && req.method === "POST") {
+    return handleLogout(req, res);
+  }
+
+  if (url.pathname === "/api/favorites") {
+    return handleFavorites(req, res);
+  }
+
+  if (url.pathname === "/api/profile") {
+    return handleProfile(req, res);
+  }
+
+  if (url.pathname === "/api/account") {
+    return handleDeleteAccount(req, res);
+  }
+
+  return json(res, 404, { error: "Not found." });
+}
+
 async function handleStatic(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const requestPath = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
@@ -210,6 +637,16 @@ const server = http.createServer((req, res) => {
 
   if (req.url?.startsWith("/api/figures")) {
     return handleFigures(req, res);
+  }
+
+  if (req.url?.startsWith("/api/session")
+    || req.url?.startsWith("/api/signup")
+    || req.url?.startsWith("/api/login")
+    || req.url?.startsWith("/api/logout")
+    || req.url?.startsWith("/api/favorites")
+    || req.url?.startsWith("/api/profile")
+    || req.url?.startsWith("/api/account")) {
+    return handleAuth(req, res);
   }
 
   return handleStatic(req, res);
