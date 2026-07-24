@@ -200,6 +200,7 @@ h1 {
 
 #refreshButton,
 .auth-actions button,
+.auth-link-button,
 .author-toggle,
 .paper-actions button,
 .share-menu summary,
@@ -217,6 +218,7 @@ h1 {
 
 #refreshButton:hover,
 .auth-actions button:hover,
+.auth-link-button:hover,
 .author-toggle:hover,
 .paper-actions button:hover,
 .icon-button:hover,
@@ -227,6 +229,7 @@ h1 {
 
 #refreshButton:active,
 .auth-actions button:active,
+.auth-link-button:active,
 .author-toggle:active,
 .paper-actions button:active,
 .icon-button:active,
@@ -242,6 +245,15 @@ h1 {
 .auth-actions button {
   min-height: 36px;
   padding: 7px 12px;
+}
+
+.auth-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 7px 12px;
+  text-decoration: none;
 }
 
 .category-filter-panel {
@@ -450,6 +462,81 @@ h1 {
   background: #fff9df;
 }
 
+.admin-shell {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.admin-back-link {
+  color: var(--accent-strong);
+  font-weight: 750;
+  text-decoration-color: rgba(23, 107, 114, 0.32);
+  text-underline-offset: 3px;
+}
+
+.admin-users {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-user-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdfd;
+  padding: 14px;
+  box-shadow: var(--shadow-soft);
+}
+
+.admin-user-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.admin-user-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.admin-user-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.admin-user-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.danger-button {
+  min-height: 36px;
+  border: 1px solid #b44a36;
+  border-radius: 6px;
+  background: #b44a36;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 750;
+  padding: 7px 12px;
+}
+
+.danger-button:hover {
+  background: #963926;
+  border-color: #963926;
+}
+
 .paper-header {
   display: block;
 }
@@ -650,6 +737,11 @@ h1 {
 .topic-tile[data-topic="favorites"],
 .active-topic-panel[data-topic="favorites"] {
   --tile-bg: #c08518;
+}
+
+.topic-tile[data-topic="my-papers"],
+.active-topic-panel[data-topic="my-papers"] {
+  --tile-bg: #b06f1f;
 }
 
 .topic-tile[data-topic="reionization"],

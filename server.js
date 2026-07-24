@@ -13,6 +13,7 @@ const host = process.env.HOST || "0.0.0.0";
 const sessionCookieName = "dap_session";
 const sessionMaxAgeSeconds = 60 * 60 * 24 * 30;
 const sessions = new Map();
+const authorMetadataCache = new Map();
 let userStoreWrite = Promise.resolve();
 
 const mimeTypes = {
@@ -108,6 +109,17 @@ function normalizeUsername(value) {
   return value.trim().toLowerCase();
 }
 
+const adminUsernames = new Set(
+  (process.env.ADMIN_USERS || "afaisst")
+    .split(",")
+    .map((value) => normalizeUsername(value))
+    .filter(Boolean)
+);
+
+function isAdminUser(user) {
+  return Boolean(user?.isAdmin) || adminUsernames.has(normalizeUsername(user?.username || ""));
+}
+
 function hashPassword(password, salt) {
   return scryptSync(password, salt, 64).toString("hex");
 }
@@ -175,6 +187,7 @@ function sanitizeFavoritePaper(paper) {
     id: favoriteId,
     title,
     authors: Array.isArray(paper.authors) ? paper.authors.filter((author) => typeof author === "string").slice(0, 40) : [],
+    authorOrcids: Array.isArray(paper.authorOrcids) ? paper.authorOrcids.filter((orcid) => typeof orcid === "string").slice(0, 40) : [],
     abstract,
     published,
     updated,
@@ -205,7 +218,8 @@ function serializeUser(user) {
   return {
     username: user.username,
     fullName: user.fullName || "",
-    orcid: user.orcid || ""
+    orcid: user.orcid || "",
+    isAdmin: isAdminUser(user)
   };
 }
 
@@ -414,6 +428,57 @@ async function handleDeleteAccount(req, res) {
   return json(res, 200, { ok: true });
 }
 
+function ensureAdmin(req, res, auth) {
+  if (!auth || !isAdminUser(auth.user)) {
+    json(res, 403, { error: "Admin access is required." });
+    return false;
+  }
+
+  return true;
+}
+
+async function handleAdminUsers(req, res) {
+  const auth = await getUserFromSession(req, res);
+
+  if (!auth || !ensureAdmin(req, res, auth)) {
+    return;
+  }
+
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const usernameParam = decodeURIComponent(url.pathname.replace(/^\/api\/admin\/users\/?/, "")).trim();
+
+  if (req.method === "GET" && url.pathname === "/api/admin/users") {
+    return json(res, 200, {
+      users: auth.store.users.map((user) => ({
+        ...serializeUser(user),
+        favoriteCount: Array.isArray(user.favorites) ? user.favorites.length : 0,
+        createdAt: user.createdAt || ""
+      }))
+    });
+  }
+
+  if (req.method === "DELETE" && usernameParam) {
+    const usernameKey = normalizeUsername(usernameParam);
+
+    if (usernameKey === normalizeUsername(auth.user.username)) {
+      return json(res, 400, { error: "Use your own account settings to delete the current admin account." });
+    }
+
+    const targetUser = auth.store.users.find((user) => user.usernameKey === usernameKey);
+
+    if (!targetUser) {
+      return json(res, 404, { error: "That account does not exist." });
+    }
+
+    auth.store.users = auth.store.users.filter((user) => user.usernameKey !== usernameKey);
+    await writeUserStore(auth.store);
+    deleteSessionsForUsername(targetUser.username);
+    return json(res, 200, { ok: true });
+  }
+
+  return json(res, 405, { error: "Method not allowed." });
+}
+
 function dateToArxivBounds(dateValue) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
     throw new Error("Expected date in YYYY-MM-DD format.");
@@ -456,6 +521,14 @@ function parseFigureHtml(html, baseUrl) {
     })
     .filter((figure, index, figures) => figures.findIndex((item) => item.src === figure.src) === index)
     .slice(0, 30);
+}
+
+function parsePaperAuthorMetadata(html) {
+  const orcids = [...html.matchAll(/https?:\/\/orcid\.org\/([0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9X]{4})/gi)]
+    .map((match) => match[1].toUpperCase())
+    .filter((orcid, index, values) => values.indexOf(orcid) === index);
+
+  return { orcids };
 }
 
 function cleanHtml(value) {
@@ -519,6 +592,51 @@ async function handleFigures(req, res) {
   } catch (error) {
     json(res, 502, {
       error: "Could not load figures for this paper.",
+      detail: error.message
+    });
+  }
+}
+
+async function handlePaperAuthors(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const id = url.searchParams.get("id")?.trim();
+
+  if (!id || !/^\d{4}\.\d{4,5}(v\d+)?$/.test(id)) {
+    return json(res, 400, { error: "Missing or invalid arXiv ID." });
+  }
+
+  if (authorMetadataCache.has(id)) {
+    return json(res, 200, authorMetadataCache.get(id), {
+      "cache-control": "public, max-age=900"
+    });
+  }
+
+  const absUrl = `https://arxiv.org/abs/${id}`;
+
+  try {
+    const response = await fetch(absUrl, {
+      headers: {
+        "user-agent": "DailyAstroPH/1.0 (local webpage; author metadata)"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`arXiv abstract page returned HTTP ${response.status}`);
+    }
+
+    const html = await response.text();
+    const metadata = {
+      id,
+      source: absUrl,
+      ...parsePaperAuthorMetadata(html)
+    };
+    authorMetadataCache.set(id, metadata);
+    return json(res, 200, metadata, {
+      "cache-control": "public, max-age=900"
+    });
+  } catch (error) {
+    return json(res, 502, {
+      error: "Could not load author metadata for this paper.",
       detail: error.message
     });
   }
@@ -605,6 +723,10 @@ async function handleAuth(req, res) {
     return handleDeleteAccount(req, res);
   }
 
+  if (url.pathname === "/api/admin/users" || url.pathname.startsWith("/api/admin/users/")) {
+    return handleAdminUsers(req, res);
+  }
+
   return json(res, 404, { error: "Not found." });
 }
 
@@ -639,13 +761,18 @@ const server = http.createServer((req, res) => {
     return handleFigures(req, res);
   }
 
+  if (req.url?.startsWith("/api/paper-authors")) {
+    return handlePaperAuthors(req, res);
+  }
+
   if (req.url?.startsWith("/api/session")
     || req.url?.startsWith("/api/signup")
     || req.url?.startsWith("/api/login")
     || req.url?.startsWith("/api/logout")
     || req.url?.startsWith("/api/favorites")
     || req.url?.startsWith("/api/profile")
-    || req.url?.startsWith("/api/account")) {
+    || req.url?.startsWith("/api/account")
+    || req.url?.startsWith("/api/admin/users")) {
     return handleAuth(req, res);
   }
 

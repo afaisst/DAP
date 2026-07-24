@@ -57,6 +57,12 @@ const favoriteTopic = {
   terms: []
 };
 
+const myPapersTopic = {
+  id: "my-papers",
+  label: "My Papers",
+  terms: []
+};
+
 const favoritesStorageKey = "daily-astro-ph:favorites";
 
 const state = {
@@ -99,8 +105,10 @@ const orcidInput = document.querySelector("#orcidInput");
 const loginButton = document.querySelector("#loginButton");
 const signupButton = document.querySelector("#signupButton");
 const saveProfileButton = document.querySelector("#saveProfileButton");
+const adminLink = document.querySelector("#adminLink");
 const logoutButton = document.querySelector("#logoutButton");
 const deleteAccountButton = document.querySelector("#deleteAccountButton");
+const authorMetadataLookups = new Map();
 
 const figureState = {
   figures: [],
@@ -204,7 +212,8 @@ function parseArxivFeed(xmlText) {
       published: entry.querySelector("published")?.textContent || "",
       updated: entry.querySelector("updated")?.textContent || "",
       categories,
-      url: abstractUrl || cleanText(entry.querySelector("id")?.textContent || "")
+      url: abstractUrl || cleanText(entry.querySelector("id")?.textContent || ""),
+      authorMetadataLoaded: authorOrcids.length > 0
     };
   });
 }
@@ -242,7 +251,15 @@ function render() {
         .sort((a, b) => b.relevance - a.relevance || new Date(b.published) - new Date(a.published))
     }))
     .filter((group) => group.papers.length);
+  const myPapers = filtered.filter(paperMatchesProfile);
   const favoritePapers = getFavoritePapers().filter(matchesSearch);
+
+  if (myPapers.length) {
+    grouped.unshift({
+      topic: myPapersTopic,
+      papers: [...myPapers].sort((a, b) => new Date(b.published) - new Date(a.published))
+    });
+  }
 
   if (favoritePapers.length) {
     grouped.unshift({
@@ -307,6 +324,7 @@ function render() {
   activeGroup.papers.forEach((paper) => grid.appendChild(renderPaper(paper)));
   topicList.appendChild(panel);
   typesetMath(topicList);
+  void enrichVisiblePaperAuthors(activeGroup.papers);
 }
 
 function renderPaper(paper) {
@@ -576,6 +594,49 @@ function getFavoritePapers() {
   return [...state.favorites].sort((a, b) => new Date(b.favoritedAt || b.published) - new Date(a.favoritedAt || a.published));
 }
 
+async function enrichVisiblePaperAuthors(papers) {
+  const profileOrcid = normalizeOrcid(state.sessionUser?.orcid || "");
+
+  if (!profileOrcid) {
+    return;
+  }
+
+  const targets = papers.filter((paper) => !paper.authorMetadataLoaded && !authorMetadataLookups.has(paper.id));
+
+  if (!targets.length) {
+    return;
+  }
+
+  const requests = targets.map(async (paper) => {
+    const request = fetch(`/api/paper-authors?id=${encodeURIComponent(arxivIdFromUrl(paper.url))}`)
+      .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
+      .then(({ ok, data }) => {
+        if (ok) {
+          paper.authorOrcids = Array.isArray(data.orcids) ? data.orcids : [];
+        }
+
+        paper.authorMetadataLoaded = true;
+        return ok;
+      })
+      .catch(() => {
+        paper.authorMetadataLoaded = true;
+        return false;
+      })
+      .finally(() => {
+        authorMetadataLookups.delete(paper.id);
+      });
+
+    authorMetadataLookups.set(paper.id, request);
+    return request;
+  });
+
+  const results = await Promise.all(requests);
+
+  if (results.some(Boolean)) {
+    render();
+  }
+}
+
 function favoriteKey(paper) {
   return paper.id || paper.url;
 }
@@ -652,6 +713,7 @@ function updateAuthUi() {
   loginButton.hidden = loggedIn;
   signupButton.hidden = loggedIn;
   saveProfileButton.hidden = !loggedIn;
+  adminLink.hidden = !state.sessionUser?.isAdmin;
   logoutButton.hidden = !loggedIn;
   deleteAccountButton.hidden = !loggedIn;
 
@@ -680,17 +742,26 @@ function paperMatchesProfile(paper) {
     return false;
   }
 
-  const fullName = normalizePersonName(state.sessionUser.fullName || "");
-  const paperAuthors = paper.authors.map(normalizePersonName);
-
-  if (fullName && paperAuthors.some((author) => samePersonName(author, fullName))) {
-    return true;
-  }
-
   const profileOrcid = normalizeOrcid(state.sessionUser.orcid || "");
   const paperOrcids = (paper.authorOrcids || []).map(normalizeOrcid);
 
-  return Boolean(profileOrcid) && paperOrcids.includes(profileOrcid);
+  if (profileOrcid) {
+    if (paperOrcids.includes(profileOrcid)) {
+      return true;
+    }
+
+    if (paper.authorMetadataLoaded && paperOrcids.length > 0) {
+      return false;
+    }
+  }
+
+  const profileName = extractNameSignature(state.sessionUser.fullName || "");
+
+  if (!profileName) {
+    return false;
+  }
+
+  return paper.authors.some((author) => sameNameSignature(extractNameSignature(author), profileName));
 }
 
 function renderCategoryFilters() {
@@ -1038,24 +1109,28 @@ function cleanText(value) {
   return value.replace(/\s+/g, " ").trim();
 }
 
-function normalizePersonName(value) {
-  return cleanText(value)
+function extractNameSignature(value) {
+  const normalized = cleanText(value)
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/,/g, " ")
+    .replace(/[^a-z0-9\s-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
+  const tokens = normalized.split(" ").filter(Boolean);
+
+  if (tokens.length < 2) {
+    return null;
+  }
+
+  return {
+    first: tokens[0],
+    last: tokens[tokens.length - 1]
+  };
 }
 
-function samePersonName(left, right) {
-  if (!left || !right) {
-    return false;
-  }
-
-  if (left === right) {
-    return true;
-  }
-
-  return left.length > 6 && right.length > 6 && (left.includes(right) || right.includes(left));
+function sameNameSignature(left, right) {
+  return Boolean(left && right && left.first === right.first && left.last === right.last);
 }
 
 function normalizeOrcid(value) {

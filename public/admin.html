@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Daily AstroPH Admin</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app-shell admin-shell">
+      <section class="topbar" aria-label="Admin controls">
+        <div class="admin-toolbar">
+          <div>
+            <p class="eyebrow">local admin</p>
+            <h1>Members</h1>
+          </div>
+          <a class="admin-back-link" href="/">Back to Daily AstroPH</a>
+        </div>
+        <div id="adminStatus" class="auth-status">Loading members...</div>
+      </section>
+
+      <section id="adminUsers" class="admin-users" aria-live="polite"></section>
+    </main>
+
+    <script src="/admin.js" type="module"></script>
+  </body>
+</html>
