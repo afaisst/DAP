@@ -7,7 +7,7 @@ const topics = [
   {
     id: "large-scale-structure",
     label: "Environment",
-    terms: ["large scale structure", "weak lensing", "clustering", "halo", "void", "cosmic web", "lss", "proto cluster", "proto-cluster", "groups", "environment", "satellite"]
+    terms: ["large scale structure", "weak lensing", "clustering", "halo", "void", "cosmic web", "lss", "proto cluster", "proto-cluster", "group", "environmental"]
   },
   {
     id: "reionization",
