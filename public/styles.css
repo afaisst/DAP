@@ -729,49 +729,69 @@ h1 {
   box-shadow: 0 22px 80px rgba(10, 20, 24, 0.28);
 }
 
+.topic-tile[data-topic="quenching"],
+.active-topic-panel[data-topic="quenching"] {
+  --tile-bg: #af403b;
+}
+
 .topic-tile[data-topic="large-scale-structure"],
 .active-topic-panel[data-topic="large-scale-structure"] {
   --tile-bg: #315f9a;
 }
 
+.topic-tile[data-topic="feedback-outflow"],
+.active-topic-panel[data-topic="feedback-outflow"] {
+  --tile-bg: #72319a;
+}
+
 .topic-tile[data-topic="favorites"],
 .active-topic-panel[data-topic="favorites"] {
-  --tile-bg: #c08518;
+  --tile-bg: #f0d02fd9;
 }
 
 .topic-tile[data-topic="my-papers"],
 .active-topic-panel[data-topic="my-papers"] {
-  --tile-bg: #b06f1f;
+  --tile-bg: #292828;
 }
 
 .topic-tile[data-topic="reionization"],
 .active-topic-panel[data-topic="reionization"] {
-  --tile-bg: #8b5c25;
+  --tile-bg: #1571db;
 }
 
 .topic-tile[data-topic="galaxies"],
 .active-topic-panel[data-topic="galaxies"] {
-  --tile-bg: #26704a;
+  --tile-bg: #318459;
 }
 
 .topic-tile[data-topic="black-holes"],
 .active-topic-panel[data-topic="black-holes"] {
-  --tile-bg: #394554;
+  --tile-bg: #3a3e44;
+}
+
+.topic-tile[data-topic="dark-matter"],
+.active-topic-panel[data-topic="dark-matter"] {
+  --tile-bg: #070707;
 }
 
 .topic-tile[data-topic="local-galaxies"],
 .active-topic-panel[data-topic="local-galaxies"] {
-  --tile-bg: #28727c;
+  --tile-bg: #3697a4;
+}
+
+.topic-tile[data-topic="transient"],
+.active-topic-panel[data-topic="transient"] {
+  --tile-bg: #67d241;
 }
 
 .topic-tile[data-topic="stars"],
 .active-topic-panel[data-topic="stars"] {
-  --tile-bg: #9a6a18;
+  --tile-bg: #b07e2d;
 }
 
 .topic-tile[data-topic="cosmology"],
 .active-topic-panel[data-topic="cosmology"] {
-  --tile-bg: #60509a;
+  --tile-bg: rgb(96, 80, 154);
 }
 
 .topic-tile[data-topic="other"],

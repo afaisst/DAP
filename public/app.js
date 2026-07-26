@@ -1,38 +1,58 @@
 const topics = [
+    {
+    id: "cosmology",
+    label: "Cosmology",
+    terms: ["cosmology", "cosmological", "dark matter", "dark energy", "cmb", "inflation", "hubble constant", "h0", "sigma8", "s8", "lambda cdm", "lcdm", "expansion", "primordial fluctuations", "cosmic microwave background", "baryon acoustic", "bao", "neutrino"]
+  },
   {
     id: "large-scale-structure",
-    label: "Large scale structure",
-    terms: ["large scale structure", "dark matter halo", "weak lensing", "clustering", "baryon acoustic", "bao", "simulation", "halo", "void", "cosmic web"]
+    label: "Environment",
+    terms: ["large scale structure", "weak lensing", "clustering", "halo", "void", "cosmic web", "lss", "proto cluster", "proto-cluster", "groups", "environment", "satellite"]
   },
   {
     id: "reionization",
     label: "Reionization",
-    terms: ["reionization", "epoch of reionization", "eor", "first galaxies", "high-redshift", "high redshift", "igm", "lyman alpha", "21 cm", "jwst"]
+    terms: ["reionization", "epoch of reionization", "eor", "first galaxies", "igm", "lyman alpha", "lyman escape", "escape fraction", "lyc", "lyc escape", "lyman continuum", "lyman continuum escape", "popIII", "population III", "bubble"]
   },
   {
     id: "galaxies",
     label: "Galaxies",
-    terms: ["galaxy", "galaxies", "galactic", "morphology", "stellar mass", "metallicity", "quenching", "gas", "dust", "ism", "circumgalactic", "cgm"]
+    terms: ["galaxy", "galaxies", "galactic", "morphology", "kinematics", "structure", "stellar mass", "metallicity", "gas", "dust", "ism", "circumgalactic", "cgm", "interstellar medium", "bursty", "burstiness", "dwarf", "little red dot", "lrd"]
+  },
+  {
+    id: "quenching",
+    label: "Quiescent",
+    terms: ["quiescent", "quenching", "ram pressure", "stripping", "mass quenching", "environment quenching", "red sequence", "green valley", "lulling", "bursty", "burstiness", "satellite", "satellite quenching"]
+  },
+  {
+    id: "feedback-outflow",
+    label: "Feedback",
+    terms: ["feedback", "outflow", "inflow", "mass loading", "jet"]
   },
   {
     id: "black-holes",
     label: "Black holes",
-    terms: ["black hole", "agn", "quasar", "accretion", "event horizon", "supermassive", "smbh", "jets", "tidal disruption", "tde"]
+    terms: ["black hole", "agn", "quasar", "accretion", "event horizon", "supermassive", "smbh", "jets", "radio jet", "lrd", "little red dot"]
+  },
+  {
+    id: "dark-matter",
+    label: "Dark Matter",
+    terms: ["dark matter", "weak lensing", "strong lensing", "lensing"]
+  },
+  {
+    id: "transient",
+    label: "Transients",
+    terms: ["transient", "supernovae", "sne", "variable", "alert"]
   },
   {
     id: "local-galaxies",
     label: "Local galaxies",
-    terms: ["milky way", "andromeda", "m31", "local group", "magellanic", "nearby galaxy", "dwarf galaxy", "satellite galaxy", "local volume"]
+    terms: ["milky way", "andromeda", "m31", "local group", "magellanic", "nearby galaxy", "dwarf galaxy", "local volume"]
   },
   {
     id: "stars",
     label: "Stars",
     terms: ["star", "stars", "stellar", "supernova", "nova", "exoplanet", "planet", "white dwarf", "neutron star", "binary", "asteroseismology", "protostar"]
-  },
-  {
-    id: "cosmology",
-    label: "Cosmology",
-    terms: ["cosmology", "cosmological", "dark matter", "dark energy", "cmb", "inflation", "hubble constant", "h0", "sigma8", "s8", "lambda cdm", "lcdm", "early universe"]
   }
 ];
 
