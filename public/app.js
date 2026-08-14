@@ -960,26 +960,29 @@ async function copyBibtex() {
 function buildBibtexEntry(paper) {
   const arxivId = paperArxivId(paper);
   const publishedDate = paper.published ? new Date(paper.published) : null;
-  const year = publishedDate && Number.isFinite(publishedDate.getTime())
-    ? publishedDate.getUTCFullYear()
-    : new Date().getUTCFullYear();
+  const safeDate = publishedDate && Number.isFinite(publishedDate.getTime()) ? publishedDate : new Date();
+  const year = safeDate.getUTCFullYear();
+  const month = monthAbbreviation(safeDate);
   const key = bibtexKey(paper, arxivId, year);
   const fields = [
-    ["title", paper.title],
-    ["author", paper.authors.join(" and ")],
-    ["year", String(year)],
-    ["eprint", arxivId],
-    ["archivePrefix", "arXiv"],
-    ["primaryClass", paper.categories[0] || ""],
-    ["url", paper.url],
-    ["abstract", paper.abstract]
+    ["author", `{${formatBibtexAuthors(paper.authors)}}`, 7],
+    ["title", `"{${escapeBibtexValue(paper.title)}}"`, 8],
+    ["journal", "{arXiv e-prints}", 6],
+    ["keywords", `{${escapeBibtexValue(paper.categories.join(", "))}}`, 5],
+    ["year", String(year), 9],
+    ["month", month, 8],
+    ["eid", `{arXiv:${escapeBibtexValue(arxivId)}}`, 10],
+    ["pages", `{arXiv:${escapeBibtexValue(arxivId)}}`, 8],
+    ["archivePrefix", "{arXiv}", 0],
+    ["eprint", `{${escapeBibtexValue(arxivId)}}`, 7],
+    ["primaryClass", paper.categories[0] ? `{${escapeBibtexValue(paper.categories[0])}}` : "", 1]
   ].filter(([, value]) => value);
 
   const body = fields
-    .map(([field, value]) => `  ${field} = {${escapeBibtexValue(value)}}`)
+    .map(([field, value, indent]) => `${" ".repeat(indent)}${field} = ${value}`)
     .join(",\n");
 
-  return `@misc{${key},\n${body}\n}`;
+  return `@ARTICLE{${key},\n${body}\n}`;
 }
 
 function paperArxivId(paper) {
@@ -1006,9 +1009,34 @@ function bibtexKey(paper, arxivId, year) {
   return `${surname}${year}${compactId}`;
 }
 
+function monthAbbreviation(date) {
+  return ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"][date.getUTCMonth()];
+}
+
+function formatBibtexAuthors(authors) {
+  return authors
+    .map(formatBibtexAuthor)
+    .filter(Boolean)
+    .join(" and ");
+}
+
+function formatBibtexAuthor(author) {
+  const parts = cleanText(author).split(/\s+/).filter(Boolean);
+
+  if (!parts.length) {
+    return "";
+  }
+
+  if (parts.length === 1) {
+    return `{${escapeBibtexValue(parts[0])}}`;
+  }
+
+  const lastName = parts.pop();
+  return `{${escapeBibtexValue(lastName)}}, ${escapeBibtexValue(parts.join(" "))}`;
+}
+
 function escapeBibtexValue(value) {
   return cleanText(value)
-    .replaceAll("\\", "\\textbackslash{}")
     .replaceAll("{", "\\{")
     .replaceAll("}", "\\}");
 }

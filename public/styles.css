@@ -925,7 +925,8 @@ h1 {
 
 .bibtex-actions button {
   min-height: 36px;
-  background: #53682e;
+  background: #6b7479;
+  border-color: #6b7479;
 }
 
 .figure-carousel {
