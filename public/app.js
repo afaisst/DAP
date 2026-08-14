@@ -121,6 +121,7 @@ const bibtexModal = document.querySelector("#bibtexModal");
 const bibtexModalTitle = document.querySelector("#bibtexModalTitle");
 const bibtexCloseButton = document.querySelector("#bibtexCloseButton");
 const bibtexText = document.querySelector("#bibtexText");
+const bibtexAdsLink = document.querySelector("#bibtexAdsLink");
 const bibtexCopyButton = document.querySelector("#bibtexCopyButton");
 const authStatus = document.querySelector("#authStatus");
 const usernameInput = document.querySelector("#usernameInput");
@@ -369,6 +370,7 @@ function renderPaper(paper) {
   const libraryMenu = node.querySelector(".library-menu");
   const zoteroLibraryLink = node.querySelector(".zotero-library-link");
   const papersLibraryLink = node.querySelector(".papers-library-link");
+  const adsBibtexLink = node.querySelector(".ads-bibtex-link");
   const bibtexButton = node.querySelector(".bibtex-button");
   const favoriteButton = node.querySelector(".favorite-button");
   const figuresButton = node.querySelector(".figures-button");
@@ -383,7 +385,7 @@ function renderPaper(paper) {
   favoriteButton.addEventListener("click", () => toggleFavorite(paper));
   copyButton.addEventListener("click", () => copyPaperLink(copyButton, paper.url, shareMenu));
   setShareLinks(paper, { emailShareLink, xShareLink, facebookShareLink, linkedinShareLink });
-  setLibraryLinks(paper, { zoteroLibraryLink, papersLibraryLink });
+  setLibraryLinks(paper, { zoteroLibraryLink, papersLibraryLink, adsBibtexLink });
   bibtexButton.addEventListener("click", () => openBibtexModal(paper, libraryMenu));
   figuresButton.addEventListener("click", () => openFigureModal(paper));
   summaryButton.addEventListener("click", () => openSummaryModal(paper));
@@ -406,6 +408,7 @@ function setShareLinks(paper, links) {
 function setLibraryLinks(paper, links) {
   links.zoteroLibraryLink.href = `https://www.zotero.org/save?q=${encodeURIComponent(paper.url)}`;
   links.papersLibraryLink.href = paper.url;
+  links.adsBibtexLink.href = adsExportCitationUrl(paper);
 }
 
 function loadLocalFavorites() {
@@ -934,6 +937,7 @@ function trimSentence(sentence) {
 function openBibtexModal(paper, libraryMenu) {
   bibtexModalTitle.textContent = paper.title;
   bibtexText.value = buildBibtexEntry(paper);
+  bibtexAdsLink.href = adsExportCitationUrl(paper);
   bibtexCopyButton.textContent = "Copy BibTeX";
   libraryMenu.open = false;
   bibtexModal.showModal();
@@ -994,6 +998,10 @@ function paperArxivId(paper) {
   }
 
   return source.split("/").filter(Boolean).pop() || "arxiv";
+}
+
+function adsExportCitationUrl(paper) {
+  return `https://ui.adsabs.harvard.edu/abs/arXiv:${encodeURIComponent(paperArxivId(paper))}/exportcitation`;
 }
 
 function bibtexKey(paper, arxivId, year) {

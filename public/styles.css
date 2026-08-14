@@ -920,13 +920,23 @@ h1 {
 
 .bibtex-actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: flex-end;
 }
 
-.bibtex-actions button {
+.bibtex-actions button,
+.bibtex-actions a {
   min-height: 36px;
   background: #6b7479;
   border-color: #6b7479;
+  border-radius: 6px;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  text-decoration: none;
+  font-weight: 750;
 }
 
 .figure-carousel {
