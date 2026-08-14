@@ -19,6 +19,7 @@ submissions by topic.
 ## Run Locally
 
 ```bash
+npm install
 npm start
 ```
 
@@ -31,6 +32,34 @@ http://127.0.0.1:4180/
 Use the local server URL rather than opening `public/index.html` directly. The
 server provides the arXiv proxy endpoints used by the paper list and figure
 carousel.
+
+By default, local user accounts and favorites are stored in `data/users.json`.
+For deployed environments, use Postgres by setting `DATABASE_URL`.
+
+## Persistent User Storage
+
+Vercel and Render free web services do not provide a durable writable filesystem.
+Do not rely on `data/users.json` in production.
+
+Set these environment variables for deployment:
+
+```text
+DATABASE_URL=postgres://user:password@host:5432/database
+SESSION_SECRET=replace-with-a-long-random-string
+ADMIN_USERS=afaisst
+```
+
+For a local Postgres server without SSL, also set:
+
+```text
+POSTGRES_SSL=false
+```
+
+To import the current local `data/users.json` into Postgres:
+
+```bash
+DATABASE_URL="postgres://..." npm run import:users
+```
 
 ## Public Hosting
 

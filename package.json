@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "import:users": "node scripts/import-users-to-postgres.js"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
   }
 }

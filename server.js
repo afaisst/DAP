@@ -1,6 +1,6 @@
 import http from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,9 +12,11 @@ const port = Number(process.env.PORT || 4180);
 const host = process.env.HOST || "0.0.0.0";
 const sessionCookieName = "dap_session";
 const sessionMaxAgeSeconds = 60 * 60 * 24 * 30;
-const sessions = new Map();
+const sessionSecret = process.env.SESSION_SECRET || "daily-astroph-local-dev-secret";
 const authorMetadataCache = new Map();
 let userStoreWrite = Promise.resolve();
+let postgresPoolPromise;
+let postgresSchemaPromise;
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -69,40 +71,55 @@ function clearCookie(res, name) {
   setCookie(res, name, "", { maxAge: 0, path: "/" });
 }
 
-function createSession(username) {
-  const token = randomBytes(24).toString("hex");
-  sessions.set(token, {
+function base64Url(value) {
+  return Buffer.from(value).toString("base64url");
+}
+
+function signValue(value) {
+  return createHmac("sha256", sessionSecret).update(value).digest("base64url");
+}
+
+function createSessionCookie(username) {
+  const payload = base64Url(JSON.stringify({
     username,
     expiresAt: Date.now() + sessionMaxAgeSeconds * 1000
-  });
-  return token;
+  }));
+  const signature = signValue(payload);
+  return `${payload}.${signature}`;
 }
 
 function getSession(req) {
-  const token = cookies(req)[sessionCookieName];
+  const cookieValue = cookies(req)[sessionCookieName];
 
-  if (!token) {
+  if (!cookieValue) {
     return null;
   }
 
-  const session = sessions.get(token);
+  const [payload, signature] = cookieValue.split(".");
 
-  if (!session) {
+  if (!payload || !signature || signValue(payload) !== signature) {
     return null;
   }
 
-  if (session.expiresAt < Date.now()) {
-    sessions.delete(token);
+  let parsed;
+
+  try {
+    parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf-8"));
+  } catch {
     return null;
   }
 
-  return { token, ...session };
+  if (!parsed.username || parsed.expiresAt < Date.now()) {
+    return null;
+  }
+
+  return {
+    username: parsed.username
+  };
 }
 
-function deleteSession(token) {
-  if (token) {
-    sessions.delete(token);
-  }
+function deleteSession() {
+  return null;
 }
 
 function normalizeUsername(value) {
@@ -148,6 +165,10 @@ async function readJsonBody(req) {
 }
 
 async function readUserStore() {
+  if (process.env.DATABASE_URL) {
+    return readPostgresUserStore();
+  }
+
   try {
     const raw = await readFile(usersFile, "utf-8");
     const parsed = JSON.parse(raw);
@@ -162,10 +183,131 @@ async function readUserStore() {
 }
 
 async function writeUserStore(store) {
+  if (process.env.DATABASE_URL) {
+    return writePostgresUserStore(store);
+  }
+
   userStoreWrite = userStoreWrite.then(async () => {
     await mkdir(dataDir, { recursive: true });
     await writeFile(usersFile, `${JSON.stringify(store, null, 2)}\n`, "utf-8");
   });
+  return userStoreWrite;
+}
+
+async function getPostgresPool() {
+  if (!postgresPoolPromise) {
+    postgresPoolPromise = import("pg").then(({ Pool }) => new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.POSTGRES_SSL === "false" ? false : { rejectUnauthorized: false }
+    }));
+  }
+
+  return postgresPoolPromise;
+}
+
+async function ensurePostgresSchema() {
+  if (!postgresSchemaPromise) {
+    postgresSchemaPromise = getPostgresPool().then((pool) => pool.query(`
+      CREATE TABLE IF NOT EXISTS dap_users (
+        username TEXT PRIMARY KEY,
+        username_key TEXT UNIQUE NOT NULL,
+        password_salt TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        full_name TEXT NOT NULL DEFAULT '',
+        orcid TEXT NOT NULL DEFAULT '',
+        is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+        favorites JSONB NOT NULL DEFAULT '[]'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `));
+  }
+
+  return postgresSchemaPromise;
+}
+
+function rowToUser(row) {
+  return {
+    username: row.username,
+    usernameKey: row.username_key,
+    passwordSalt: row.password_salt,
+    passwordHash: row.password_hash,
+    fullName: row.full_name || "",
+    orcid: row.orcid || "",
+    isAdmin: Boolean(row.is_admin),
+    favorites: Array.isArray(row.favorites) ? row.favorites : [],
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
+  };
+}
+
+async function readPostgresUserStore() {
+  await ensurePostgresSchema();
+  const pool = await getPostgresPool();
+  const result = await pool.query("SELECT * FROM dap_users ORDER BY created_at ASC");
+  return {
+    users: result.rows.map(rowToUser)
+  };
+}
+
+async function writePostgresUserStore(store) {
+  userStoreWrite = userStoreWrite.then(async () => {
+    await ensurePostgresSchema();
+    const pool = await getPostgresPool();
+    const client = await pool.connect();
+
+    try {
+      await client.query("BEGIN");
+      const usernameKeys = store.users.map((user) => user.usernameKey);
+
+      if (usernameKeys.length) {
+        await client.query("DELETE FROM dap_users WHERE NOT (username_key = ANY($1::text[]))", [usernameKeys]);
+      } else {
+        await client.query("DELETE FROM dap_users");
+      }
+
+      for (const user of store.users) {
+        await client.query(`
+          INSERT INTO dap_users (
+            username,
+            username_key,
+            password_salt,
+            password_hash,
+            full_name,
+            orcid,
+            is_admin,
+            favorites,
+            created_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, COALESCE($9::timestamptz, NOW()))
+          ON CONFLICT (username_key) DO UPDATE SET
+            username = EXCLUDED.username,
+            password_salt = EXCLUDED.password_salt,
+            password_hash = EXCLUDED.password_hash,
+            full_name = EXCLUDED.full_name,
+            orcid = EXCLUDED.orcid,
+            is_admin = EXCLUDED.is_admin,
+            favorites = EXCLUDED.favorites
+        `, [
+          user.username,
+          user.usernameKey,
+          user.passwordSalt,
+          user.passwordHash,
+          user.fullName || "",
+          user.orcid || "",
+          Boolean(user.isAdmin),
+          JSON.stringify(Array.isArray(user.favorites) ? user.favorites : []),
+          user.createdAt || null
+        ]);
+      }
+
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
+
   return userStoreWrite;
 }
 
@@ -223,12 +365,8 @@ function serializeUser(user) {
   };
 }
 
-function deleteSessionsForUsername(username) {
-  for (const [token, session] of sessions.entries()) {
-    if (session.username === username) {
-      sessions.delete(token);
-    }
-  }
+function deleteSessionsForUsername(_username) {
+  return null;
 }
 
 async function getUserFromSession(req, res) {
@@ -244,7 +382,7 @@ async function getUserFromSession(req, res) {
 
   if (!user) {
     clearCookie(res, sessionCookieName);
-    deleteSession(session.token);
+    deleteSession();
     json(res, 401, { error: "Session user no longer exists." });
     return null;
   }
@@ -264,7 +402,7 @@ async function handleSession(req, res) {
 
   if (!user) {
     clearCookie(res, sessionCookieName);
-    deleteSession(session.token);
+    deleteSession();
     return json(res, 200, { user: null });
   }
 
@@ -312,7 +450,7 @@ async function handleSignup(req, res) {
   await writeUserStore(store);
 
   const createdUser = store.users[store.users.length - 1];
-  const token = createSession(username);
+  const token = createSessionCookie(username);
   setCookie(res, sessionCookieName, token, { maxAge: sessionMaxAgeSeconds });
   return json(res, 201, { user: serializeUser(createdUser) });
 }
@@ -336,13 +474,13 @@ async function handleLogin(req, res) {
     return json(res, 401, { error: "Incorrect username or password." });
   }
 
-  const token = createSession(user.username);
+  const token = createSessionCookie(user.username);
   setCookie(res, sessionCookieName, token, { maxAge: sessionMaxAgeSeconds });
   return json(res, 200, { user: serializeUser(user) });
 }
 
 async function handleLogout(req, res) {
-  deleteSession(getSession(req)?.token);
+  deleteSession();
   clearCookie(res, sessionCookieName);
   return json(res, 200, { ok: true });
 }
