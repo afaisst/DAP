@@ -204,7 +204,9 @@ h1 {
 .author-toggle,
 .paper-actions button,
 .share-menu summary,
+.library-menu summary,
 .share-options a,
+.library-options a,
 .icon-button,
 .carousel-button {
   border: 1px solid var(--line);
@@ -221,6 +223,8 @@ h1 {
 .auth-link-button:hover,
 .author-toggle:hover,
 .paper-actions button:hover,
+.share-menu summary:hover,
+.library-menu summary:hover,
 .icon-button:hover,
 .carousel-button:hover {
   background: var(--accent-strong);
@@ -232,6 +236,8 @@ h1 {
 .auth-link-button:active,
 .author-toggle:active,
 .paper-actions button:active,
+.share-menu summary:active,
+.library-menu summary:active,
 .icon-button:active,
 .carousel-button:active {
   transform: translateY(1px);
@@ -604,7 +610,9 @@ h1 {
 
 .paper-actions button,
 .share-menu summary,
-.share-options a {
+.library-menu summary,
+.share-options a,
+.library-options a {
   min-height: 32px;
   border-color: transparent;
   padding: 5px 10px;
@@ -625,24 +633,33 @@ h1 {
   list-style: none;
 }
 
-.share-menu summary::-webkit-details-marker {
+.library-menu summary {
+  background: #53682e;
+  list-style: none;
+}
+
+.share-menu summary::-webkit-details-marker,
+.library-menu summary::-webkit-details-marker {
   display: none;
 }
 
-.share-menu {
+.share-menu,
+.library-menu {
   position: relative;
 }
 
-.share-menu[open] summary {
+.share-menu[open] summary,
+.library-menu[open] summary {
   background: var(--accent-strong);
 }
 
-.share-options {
+.share-options,
+.library-options {
   position: absolute;
   z-index: 10;
   display: grid;
   gap: 6px;
-  min-width: 150px;
+  min-width: 180px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
@@ -652,7 +669,9 @@ h1 {
 }
 
 .share-options button,
-.share-options a {
+.share-options a,
+.library-options button,
+.library-options a {
   display: block;
   width: 100%;
   background: #eef4f0;
@@ -661,7 +680,9 @@ h1 {
 }
 
 .share-options button:hover,
-.share-options a:hover {
+.share-options a:hover,
+.library-options button:hover,
+.library-options a:hover {
   background: var(--accent);
   color: #ffffff;
 }
@@ -799,7 +820,8 @@ h1 {
   --tile-bg: #667176;
 }
 
-.summary-modal {
+.summary-modal,
+.bibtex-modal {
   width: min(720px, calc(100vw - 28px));
   max-height: min(760px, calc(100vh - 28px));
   border: 1px solid var(--line);
@@ -811,19 +833,22 @@ h1 {
 }
 
 .figure-modal::backdrop,
-.summary-modal::backdrop {
+.summary-modal::backdrop,
+.bibtex-modal::backdrop {
   background: rgba(10, 18, 22, 0.45);
 }
 
 .figure-modal-shell,
-.summary-modal-shell {
+.summary-modal-shell,
+.bibtex-modal-shell {
   display: grid;
   gap: 14px;
   padding: 18px;
 }
 
 .figure-modal-header,
-.summary-modal-header {
+.summary-modal-header,
+.bibtex-modal-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
@@ -841,7 +866,8 @@ h1 {
 }
 
 .figure-modal h2,
-.summary-modal h2 {
+.summary-modal h2,
+.bibtex-modal h2 {
   margin: 0;
   font-size: 1rem;
   line-height: 1.35;
@@ -868,6 +894,38 @@ h1 {
   color: #3d484d;
   line-height: 1.55;
   padding-left: 4px;
+}
+
+.bibtex-field {
+  display: grid;
+  gap: 8px;
+}
+
+.bibtex-field span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.bibtex-field textarea {
+  min-height: 300px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbf8;
+  color: #263238;
+  font: 0.86rem/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  padding: 12px;
+}
+
+.bibtex-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.bibtex-actions button {
+  min-height: 36px;
+  background: #53682e;
 }
 
 .figure-carousel {

@@ -102,6 +102,14 @@
               <a class="linkedin-share-link" target="_blank" rel="noreferrer">LinkedIn</a>
             </div>
           </details>
+          <details class="library-menu">
+            <summary>Libraries</summary>
+            <div class="library-options">
+              <a class="zotero-library-link" target="_blank" rel="noreferrer">Add to Zotero</a>
+              <a class="papers-library-link" target="_blank" rel="noreferrer">Open for Papers/ReadCube</a>
+              <button class="bibtex-button" type="button">Show BibTeX</button>
+            </div>
+          </details>
           <button class="figures-button" type="button">Figures</button>
           <button class="summary-button" type="button">Summary</button>
         </div>
@@ -149,6 +157,27 @@
         </div>
 
         <ul id="summaryList" class="summary-list"></ul>
+      </div>
+    </dialog>
+
+    <dialog id="bibtexModal" class="bibtex-modal">
+      <div class="bibtex-modal-shell">
+        <div class="bibtex-modal-header">
+          <div>
+            <p class="modal-kicker">Paper library export</p>
+            <h2 id="bibtexModalTitle">BibTeX</h2>
+          </div>
+          <button id="bibtexCloseButton" class="icon-button" type="button" aria-label="Close BibTeX">x</button>
+        </div>
+
+        <label class="bibtex-field">
+          <span>BibTeX entry</span>
+          <textarea id="bibtexText" readonly></textarea>
+        </label>
+
+        <div class="bibtex-actions">
+          <button id="bibtexCopyButton" type="button">Copy BibTeX</button>
+        </div>
       </div>
     </dialog>
 

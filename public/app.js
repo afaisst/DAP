@@ -117,6 +117,11 @@ const summaryModal = document.querySelector("#summaryModal");
 const summaryModalTitle = document.querySelector("#summaryModalTitle");
 const summaryCloseButton = document.querySelector("#summaryCloseButton");
 const summaryList = document.querySelector("#summaryList");
+const bibtexModal = document.querySelector("#bibtexModal");
+const bibtexModalTitle = document.querySelector("#bibtexModalTitle");
+const bibtexCloseButton = document.querySelector("#bibtexCloseButton");
+const bibtexText = document.querySelector("#bibtexText");
+const bibtexCopyButton = document.querySelector("#bibtexCopyButton");
 const authStatus = document.querySelector("#authStatus");
 const usernameInput = document.querySelector("#usernameInput");
 const passwordInput = document.querySelector("#passwordInput");
@@ -156,6 +161,8 @@ figureCloseButton.addEventListener("click", () => figureModal.close());
 prevFigureButton.addEventListener("click", () => showFigure(figureState.index - 1));
 nextFigureButton.addEventListener("click", () => showFigure(figureState.index + 1));
 summaryCloseButton.addEventListener("click", () => summaryModal.close());
+bibtexCloseButton.addEventListener("click", () => bibtexModal.close());
+bibtexCopyButton.addEventListener("click", () => copyBibtex());
 loginButton.addEventListener("click", () => submitAuth("/api/login"));
 signupButton.addEventListener("click", () => submitAuth("/api/signup"));
 saveProfileButton.addEventListener("click", saveProfile);
@@ -359,6 +366,10 @@ function renderPaper(paper) {
   const xShareLink = node.querySelector(".x-share-link");
   const facebookShareLink = node.querySelector(".facebook-share-link");
   const linkedinShareLink = node.querySelector(".linkedin-share-link");
+  const libraryMenu = node.querySelector(".library-menu");
+  const zoteroLibraryLink = node.querySelector(".zotero-library-link");
+  const papersLibraryLink = node.querySelector(".papers-library-link");
+  const bibtexButton = node.querySelector(".bibtex-button");
   const favoriteButton = node.querySelector(".favorite-button");
   const figuresButton = node.querySelector(".figures-button");
   const summaryButton = node.querySelector(".summary-button");
@@ -372,6 +383,8 @@ function renderPaper(paper) {
   favoriteButton.addEventListener("click", () => toggleFavorite(paper));
   copyButton.addEventListener("click", () => copyPaperLink(copyButton, paper.url, shareMenu));
   setShareLinks(paper, { emailShareLink, xShareLink, facebookShareLink, linkedinShareLink });
+  setLibraryLinks(paper, { zoteroLibraryLink, papersLibraryLink });
+  bibtexButton.addEventListener("click", () => openBibtexModal(paper, libraryMenu));
   figuresButton.addEventListener("click", () => openFigureModal(paper));
   summaryButton.addEventListener("click", () => openSummaryModal(paper));
   renderAuthors(authors, paper.authors);
@@ -388,6 +401,11 @@ function setShareLinks(paper, links) {
   links.xShareLink.href = `https://twitter.com/intent/tweet?text=${encodedText}`;
   links.facebookShareLink.href = `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`;
   links.linkedinShareLink.href = `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`;
+}
+
+function setLibraryLinks(paper, links) {
+  links.zoteroLibraryLink.href = `https://www.zotero.org/save?q=${encodeURIComponent(paper.url)}`;
+  links.papersLibraryLink.href = paper.url;
 }
 
 function loadLocalFavorites() {
@@ -911,6 +929,88 @@ function summarySentenceScore(sentence, index, total) {
 function trimSentence(sentence) {
   const cleaned = cleanText(sentence);
   return cleaned.length > 260 ? `${cleaned.slice(0, 257).trim()}...` : cleaned;
+}
+
+function openBibtexModal(paper, libraryMenu) {
+  bibtexModalTitle.textContent = paper.title;
+  bibtexText.value = buildBibtexEntry(paper);
+  bibtexCopyButton.textContent = "Copy BibTeX";
+  libraryMenu.open = false;
+  bibtexModal.showModal();
+  bibtexText.focus();
+  bibtexText.select();
+}
+
+async function copyBibtex() {
+  const copied = await copyText(bibtexText.value);
+
+  if (copied) {
+    bibtexCopyButton.textContent = "Copied";
+    window.setTimeout(() => {
+      bibtexCopyButton.textContent = "Copy BibTeX";
+    }, 1400);
+    return;
+  }
+
+  bibtexText.focus();
+  bibtexText.select();
+  bibtexCopyButton.textContent = "Select text";
+}
+
+function buildBibtexEntry(paper) {
+  const arxivId = paperArxivId(paper);
+  const publishedDate = paper.published ? new Date(paper.published) : null;
+  const year = publishedDate && Number.isFinite(publishedDate.getTime())
+    ? publishedDate.getUTCFullYear()
+    : new Date().getUTCFullYear();
+  const key = bibtexKey(paper, arxivId, year);
+  const fields = [
+    ["title", paper.title],
+    ["author", paper.authors.join(" and ")],
+    ["year", String(year)],
+    ["eprint", arxivId],
+    ["archivePrefix", "arXiv"],
+    ["primaryClass", paper.categories[0] || ""],
+    ["url", paper.url],
+    ["abstract", paper.abstract]
+  ].filter(([, value]) => value);
+
+  const body = fields
+    .map(([field, value]) => `  ${field} = {${escapeBibtexValue(value)}}`)
+    .join(",\n");
+
+  return `@misc{${key},\n${body}\n}`;
+}
+
+function paperArxivId(paper) {
+  const source = paper.url || paper.id || "";
+  const match = source.match(/arxiv\.org\/abs\/([^?#]+)/i);
+
+  if (match) {
+    return decodeURIComponent(match[1]);
+  }
+
+  return source.split("/").filter(Boolean).pop() || "arxiv";
+}
+
+function bibtexKey(paper, arxivId, year) {
+  const firstAuthor = paper.authors[0] || "arxiv";
+  const surname = firstAuthor
+    .split(/\s+/)
+    .filter(Boolean)
+    .pop()
+    ?.replace(/[^A-Za-z0-9]/g, "")
+    .toLowerCase() || "arxiv";
+  const compactId = arxivId.replace(/[^A-Za-z0-9]/g, "").toLowerCase().slice(0, 16);
+
+  return `${surname}${year}${compactId}`;
+}
+
+function escapeBibtexValue(value) {
+  return cleanText(value)
+    .replaceAll("\\", "\\textbackslash{}")
+    .replaceAll("{", "\\{")
+    .replaceAll("}", "\\}");
 }
 
 async function copyPaperLink(button, url, shareMenu) {
