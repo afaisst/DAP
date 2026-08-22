@@ -33,6 +33,10 @@ input {
   font: inherit;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .app-shell {
   width: min(1180px, calc(100vw - 32px));
   margin: 0 auto;
