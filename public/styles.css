@@ -564,6 +564,17 @@ h1 {
   font-size: 1.05rem;
 }
 
+.profile-card--danger {
+  border-color: rgba(180, 74, 54, 0.34);
+}
+
+.profile-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .profile-field {
   display: grid;
   gap: 6px;

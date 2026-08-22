@@ -7,6 +7,7 @@ const newPasswordInput = document.querySelector("#newPasswordInput");
 const confirmPasswordInput = document.querySelector("#confirmPasswordInput");
 const togglePasswordButton = document.querySelector("#togglePasswordButton");
 const changePasswordButton = document.querySelector("#changePasswordButton");
+const deleteAccountButton = document.querySelector("#deleteAccountButton");
 
 let sessionUser = null;
 let passwordsVisible = false;
@@ -14,6 +15,7 @@ let passwordsVisible = false;
 saveProfileButton.addEventListener("click", saveProfile);
 togglePasswordButton.addEventListener("click", togglePasswordVisibility);
 changePasswordButton.addEventListener("click", changePassword);
+deleteAccountButton.addEventListener("click", deleteAccount);
 
 init();
 
@@ -122,6 +124,35 @@ async function changePassword() {
   }
 }
 
+async function deleteAccount() {
+  if (!sessionUser) {
+    return;
+  }
+
+  const confirmed = window.confirm("Delete this account and all saved data from the server? This cannot be undone.");
+
+  if (!confirmed) {
+    return;
+  }
+
+  deleteAccountButton.disabled = true;
+  profileStatus.textContent = "Deleting account...";
+
+  try {
+    const response = await fetch("/api/account", { method: "DELETE" });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Could not delete account.");
+    }
+
+    window.location.href = "/";
+  } catch (error) {
+    profileStatus.textContent = error.message;
+    deleteAccountButton.disabled = false;
+  }
+}
+
 function togglePasswordVisibility() {
   passwordsVisible = !passwordsVisible;
   const type = passwordsVisible ? "text" : "password";
@@ -140,7 +171,8 @@ function setFormDisabled(disabled) {
     newPasswordInput,
     confirmPasswordInput,
     togglePasswordButton,
-    changePasswordButton
+    changePasswordButton,
+    deleteAccountButton
   ].forEach((element) => {
     element.disabled = disabled;
   });

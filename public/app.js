@@ -131,7 +131,6 @@ const signupButton = document.querySelector("#signupButton");
 const profileLink = document.querySelector("#profileLink");
 const adminLink = document.querySelector("#adminLink");
 const logoutButton = document.querySelector("#logoutButton");
-const deleteAccountButton = document.querySelector("#deleteAccountButton");
 const authorMetadataLookups = new Map();
 
 const figureState = {
@@ -165,7 +164,6 @@ bibtexCopyButton.addEventListener("click", () => copyBibtex());
 loginButton.addEventListener("click", () => submitAuth("/api/login"));
 signupButton.addEventListener("click", () => submitAuth("/api/signup"));
 logoutButton.addEventListener("click", logout);
-deleteAccountButton.addEventListener("click", deleteAccount);
 passwordInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     event.preventDefault();
@@ -514,40 +512,6 @@ async function logout() {
   logoutButton.disabled = false;
 }
 
-async function deleteAccount() {
-  if (!state.sessionUser) {
-    return;
-  }
-
-  const confirmed = window.confirm("Delete this account and all saved data from the local server? This cannot be undone.");
-
-  if (!confirmed) {
-    return;
-  }
-
-  deleteAccountButton.disabled = true;
-  authStatus.textContent = "Deleting account...";
-
-  try {
-    const response = await fetch("/api/account", { method: "DELETE" });
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || "Could not delete account.");
-    }
-
-    state.sessionUser = null;
-    state.favorites = loadLocalFavorites();
-    passwordInput.value = "";
-    updateAuthUi();
-    render();
-  } catch (error) {
-    authStatus.textContent = error.message;
-  } finally {
-    deleteAccountButton.disabled = false;
-  }
-}
-
 async function loadRemoteFavorites(mergeLocal = false) {
   const response = await fetch("/api/favorites");
   const data = await response.json();
@@ -726,15 +690,29 @@ function updateAuthUi() {
   profileLink.hidden = !loggedIn;
   adminLink.hidden = !(loggedIn && state.sessionUser?.isAdmin);
   logoutButton.hidden = !loggedIn;
-  deleteAccountButton.hidden = !loggedIn;
 
   if (loggedIn) {
-    authStatus.textContent = `Currently signed in as ${state.sessionUser.username}.`;
+    authStatus.textContent = welcomeMessage(state.sessionUser);
     usernameInput.value = state.sessionUser.username;
   } else {
     authStatus.textContent = "Anonymous mode. Favorites stay in this browser until you log in.";
     usernameInput.value = "";
   }
+}
+
+function welcomeMessage(user) {
+  const displayName = firstAndLastName(user.fullName || "");
+  return displayName ? `Welcome ${displayName} (${user.username})!` : `Welcome ${user.username}!`;
+}
+
+function firstAndLastName(fullName) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+
+  if (parts.length < 2) {
+    return parts[0] || "";
+  }
+
+  return `${parts[0]} ${parts[parts.length - 1]}`;
 }
 
 function setAuthButtonsDisabled(disabled) {

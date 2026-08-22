@@ -134,7 +134,7 @@ const adminUsernames = new Set(
 );
 
 function isAdminUser(user) {
-  return Boolean(user?.isAdmin) || adminUsernames.has(normalizeUsername(user?.username || ""));
+  return adminUsernames.has(normalizeUsername(user?.username || ""));
 }
 
 function hashPassword(password, salt) {
