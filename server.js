@@ -548,6 +548,43 @@ async function handleProfile(req, res) {
   return json(res, 200, { user: serializeUser(auth.user) });
 }
 
+async function handlePassword(req, res) {
+  const auth = await getUserFromSession(req, res);
+
+  if (!auth) {
+    return;
+  }
+
+  if (req.method !== "PUT") {
+    return json(res, 405, { error: "Method not allowed." });
+  }
+
+  let payload;
+
+  try {
+    payload = await readJsonBody(req);
+  } catch {
+    return json(res, 400, { error: "Invalid JSON body." });
+  }
+
+  const currentPassword = typeof payload.currentPassword === "string" ? payload.currentPassword : "";
+  const newPassword = typeof payload.newPassword === "string" ? payload.newPassword : "";
+
+  if (!verifyPassword(currentPassword, auth.user.passwordSalt, auth.user.passwordHash)) {
+    return json(res, 401, { error: "Current password is incorrect." });
+  }
+
+  if (newPassword.length < 6) {
+    return json(res, 400, { error: "New password must be at least 6 characters long." });
+  }
+
+  const salt = randomBytes(16).toString("hex");
+  auth.user.passwordSalt = salt;
+  auth.user.passwordHash = hashPassword(newPassword, salt);
+  await writeUserStore(auth.store);
+  return json(res, 200, { ok: true });
+}
+
 async function handleDeleteAccount(req, res) {
   const auth = await getUserFromSession(req, res);
 
@@ -857,6 +894,10 @@ async function handleAuth(req, res) {
     return handleProfile(req, res);
   }
 
+  if (url.pathname === "/api/password") {
+    return handlePassword(req, res);
+  }
+
   if (url.pathname === "/api/account") {
     return handleDeleteAccount(req, res);
   }
@@ -909,6 +950,7 @@ const server = http.createServer((req, res) => {
     || req.url?.startsWith("/api/logout")
     || req.url?.startsWith("/api/favorites")
     || req.url?.startsWith("/api/profile")
+    || req.url?.startsWith("/api/password")
     || req.url?.startsWith("/api/account")
     || req.url?.startsWith("/api/admin/users")) {
     return handleAuth(req, res);

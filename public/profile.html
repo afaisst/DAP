@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Daily AstroPH Profile</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app-shell admin-shell">
+      <section class="topbar" aria-label="Profile controls">
+        <div class="admin-toolbar">
+          <div>
+            <p class="eyebrow">user profile</p>
+            <h1>Profile</h1>
+          </div>
+          <a class="admin-back-link" href="/">Back to Daily AstroPH</a>
+        </div>
+        <div id="profileStatus" class="auth-status">Loading profile...</div>
+      </section>
+
+      <section class="profile-grid" aria-live="polite">
+        <article class="profile-card">
+          <h2>Author details</h2>
+          <label class="profile-field">
+            <span>Full name</span>
+            <input id="fullNameInput" type="text" autocomplete="name" placeholder="Full name">
+          </label>
+          <label class="profile-field">
+            <span>ORCID</span>
+            <input id="orcidInput" type="text" autocomplete="off" placeholder="0000-0000-0000-0000">
+          </label>
+          <div class="profile-actions">
+            <button id="saveProfileButton" type="button">Save profile</button>
+          </div>
+        </article>
+
+        <article class="profile-card">
+          <h2>Password</h2>
+          <label class="profile-field">
+            <span>Current password</span>
+            <input id="currentPasswordInput" type="password" autocomplete="current-password">
+          </label>
+          <label class="profile-field">
+            <span>New password</span>
+            <input id="newPasswordInput" type="password" autocomplete="new-password">
+          </label>
+          <label class="profile-field">
+            <span>Confirm new password</span>
+            <input id="confirmPasswordInput" type="password" autocomplete="new-password">
+          </label>
+          <div class="profile-actions">
+            <button id="togglePasswordButton" type="button" class="secondary-button">Show passwords</button>
+            <button id="changePasswordButton" type="button">Change password</button>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script src="/profile.js" type="module"></script>
+  </body>
+</html>

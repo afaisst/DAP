@@ -88,7 +88,7 @@ const favoritesStorageKey = "daily-astro-ph:favorites";
 const state = {
   papers: [],
   favorites: [],
-  selectedDate: new Date().toISOString().slice(0, 10),
+  selectedDate: formatDateInputValue(new Date()),
   search: "",
   activeCategories: new Set(astroPhCategories.map((category) => category.id)),
   activeTopicId: null,
@@ -126,11 +126,9 @@ const bibtexCopyButton = document.querySelector("#bibtexCopyButton");
 const authStatus = document.querySelector("#authStatus");
 const usernameInput = document.querySelector("#usernameInput");
 const passwordInput = document.querySelector("#passwordInput");
-const fullNameInput = document.querySelector("#fullNameInput");
-const orcidInput = document.querySelector("#orcidInput");
 const loginButton = document.querySelector("#loginButton");
 const signupButton = document.querySelector("#signupButton");
-const saveProfileButton = document.querySelector("#saveProfileButton");
+const profileLink = document.querySelector("#profileLink");
 const adminLink = document.querySelector("#adminLink");
 const logoutButton = document.querySelector("#logoutButton");
 const deleteAccountButton = document.querySelector("#deleteAccountButton");
@@ -166,7 +164,6 @@ bibtexCloseButton.addEventListener("click", () => bibtexModal.close());
 bibtexCopyButton.addEventListener("click", () => copyBibtex());
 loginButton.addEventListener("click", () => submitAuth("/api/login"));
 signupButton.addEventListener("click", () => submitAuth("/api/signup"));
-saveProfileButton.addEventListener("click", saveProfile);
 logoutButton.addEventListener("click", logout);
 deleteAccountButton.addEventListener("click", deleteAccount);
 passwordInput.addEventListener("keydown", (event) => {
@@ -208,11 +205,23 @@ async function loadPapers() {
 }
 
 function shiftSelectedDate(dayOffset) {
-  const date = new Date(`${state.selectedDate}T12:00:00`);
+  const date = parseDateInputValue(state.selectedDate);
   date.setDate(date.getDate() + dayOffset);
-  state.selectedDate = date.toISOString().slice(0, 10);
+  state.selectedDate = formatDateInputValue(date);
   dateInput.value = state.selectedDate;
   loadPapers();
+}
+
+function formatDateInputValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateInputValue(value) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day, 12);
 }
 
 function parseArxivFeed(xmlText) {
@@ -505,41 +514,6 @@ async function logout() {
   logoutButton.disabled = false;
 }
 
-async function saveProfile() {
-  if (!state.sessionUser) {
-    return;
-  }
-
-  saveProfileButton.disabled = true;
-  authStatus.textContent = "Saving profile...";
-
-  try {
-    const response = await fetch("/api/profile", {
-      method: "PUT",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        fullName: fullNameInput.value.trim(),
-        orcid: orcidInput.value.trim()
-      })
-    });
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || "Could not save profile.");
-    }
-
-    state.sessionUser = data.user;
-    updateAuthUi();
-    render();
-  } catch (error) {
-    authStatus.textContent = error.message;
-  } finally {
-    saveProfileButton.disabled = false;
-  }
-}
-
 async function deleteAccount() {
   if (!state.sessionUser) {
     return;
@@ -565,8 +539,6 @@ async function deleteAccount() {
     state.sessionUser = null;
     state.favorites = loadLocalFavorites();
     passwordInput.value = "";
-    fullNameInput.value = "";
-    orcidInput.value = "";
     updateAuthUi();
     render();
   } catch (error) {
@@ -749,25 +721,19 @@ function updateAuthUi() {
   const loggedIn = Boolean(state.sessionUser);
   usernameInput.hidden = loggedIn;
   passwordInput.hidden = loggedIn;
-  fullNameInput.hidden = !loggedIn;
-  orcidInput.hidden = !loggedIn;
   loginButton.hidden = loggedIn;
   signupButton.hidden = loggedIn;
-  saveProfileButton.hidden = !loggedIn;
-  adminLink.hidden = !state.sessionUser?.isAdmin;
+  profileLink.hidden = !loggedIn;
+  adminLink.hidden = !(loggedIn && state.sessionUser?.isAdmin);
   logoutButton.hidden = !loggedIn;
   deleteAccountButton.hidden = !loggedIn;
 
   if (loggedIn) {
-    authStatus.textContent = `Signed in as ${state.sessionUser.username}. Favorites now sync to this local server.`;
+    authStatus.textContent = `Currently signed in as ${state.sessionUser.username}.`;
     usernameInput.value = state.sessionUser.username;
-    fullNameInput.value = state.sessionUser.fullName || "";
-    orcidInput.value = state.sessionUser.orcid || "";
   } else {
     authStatus.textContent = "Anonymous mode. Favorites stay in this browser until you log in.";
     usernameInput.value = "";
-    fullNameInput.value = "";
-    orcidInput.value = "";
   }
 }
 

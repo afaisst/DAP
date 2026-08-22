@@ -35,12 +35,10 @@
             <div class="auth-form">
               <input id="usernameInput" type="text" placeholder="Username" autocomplete="username">
               <input id="passwordInput" type="password" placeholder="Password" autocomplete="current-password">
-              <input id="fullNameInput" type="text" placeholder="Full name" autocomplete="name" hidden>
-              <input id="orcidInput" type="text" placeholder="ORCID (optional)" autocomplete="off" hidden>
               <div class="auth-actions">
                 <button id="loginButton" type="button">Log in</button>
                 <button id="signupButton" type="button">Sign up</button>
-                <button id="saveProfileButton" type="button" hidden>Save profile</button>
+                <a id="profileLink" class="auth-link-button" href="/profile.html" hidden>User profile</a>
                 <a id="adminLink" class="auth-link-button" href="/admin.html" hidden>Admin</a>
                 <button id="logoutButton" type="button" hidden>Log out</button>
                 <button id="deleteAccountButton" type="button" hidden>Delete account</button>
