@@ -2,6 +2,8 @@ const profileStatus = document.querySelector("#profileStatus");
 const fullNameInput = document.querySelector("#fullNameInput");
 const orcidInput = document.querySelector("#orcidInput");
 const saveProfileButton = document.querySelector("#saveProfileButton");
+const nameAliasesList = document.querySelector("#nameAliasesList");
+const addNameAliasButton = document.querySelector("#addNameAliasButton");
 const currentPasswordInput = document.querySelector("#currentPasswordInput");
 const newPasswordInput = document.querySelector("#newPasswordInput");
 const confirmPasswordInput = document.querySelector("#confirmPasswordInput");
@@ -13,6 +15,7 @@ let sessionUser = null;
 let passwordsVisible = false;
 
 saveProfileButton.addEventListener("click", saveProfile);
+addNameAliasButton.addEventListener("click", () => addNameAliasInput("", true));
 togglePasswordButton.addEventListener("click", togglePasswordVisibility);
 changePasswordButton.addEventListener("click", changePassword);
 deleteAccountButton.addEventListener("click", deleteAccount);
@@ -33,6 +36,7 @@ async function init() {
 
     fullNameInput.value = sessionUser.fullName || "";
     orcidInput.value = sessionUser.orcid || "";
+    renderNameAliases(sessionUser.nameAliases || []);
     profileStatus.textContent = `Currently signed in as ${sessionUser.username}.`;
   } catch (error) {
     profileStatus.textContent = `Could not load profile. ${error.message}`;
@@ -56,7 +60,8 @@ async function saveProfile() {
       },
       body: JSON.stringify({
         fullName: fullNameInput.value.trim(),
-        orcid: orcidInput.value.trim()
+        orcid: orcidInput.value.trim(),
+        nameAliases: getNameAliases()
       })
     });
     const data = await response.json();
@@ -66,12 +71,61 @@ async function saveProfile() {
     }
 
     sessionUser = data.user;
+    renderNameAliases(sessionUser.nameAliases || []);
     profileStatus.textContent = "Profile saved.";
   } catch (error) {
     profileStatus.textContent = error.message;
   } finally {
     saveProfileButton.disabled = false;
   }
+}
+
+function renderNameAliases(nameAliases) {
+  nameAliasesList.innerHTML = "";
+  const aliases = Array.isArray(nameAliases) && nameAliases.length ? nameAliases : [""];
+  aliases.forEach((alias) => addNameAliasInput(alias, false));
+}
+
+function addNameAliasInput(value, shouldFocus = true) {
+  const row = document.createElement("div");
+  row.className = "name-alias-row";
+  row.innerHTML = `
+    <input type="text" value="" placeholder="Andreas Faisst">
+    <button type="button" aria-label="Remove name variant">-</button>
+  `;
+
+  const input = row.querySelector("input");
+  const removeButton = row.querySelector("button");
+  input.value = value;
+  removeButton.addEventListener("click", () => {
+    row.remove();
+
+    if (!nameAliasesList.children.length) {
+      addNameAliasInput("", true);
+    }
+  });
+  nameAliasesList.appendChild(row);
+
+  if (shouldFocus) {
+    input.focus();
+  }
+}
+
+function getNameAliases() {
+  const seen = new Set();
+  return [...nameAliasesList.querySelectorAll("input")]
+    .map((input) => input.value.trim().replace(/\s+/g, " "))
+    .filter(Boolean)
+    .filter((alias) => {
+      const key = alias.toLowerCase();
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    });
 }
 
 async function changePassword() {
@@ -167,6 +221,7 @@ function setFormDisabled(disabled) {
     fullNameInput,
     orcidInput,
     saveProfileButton,
+    addNameAliasButton,
     currentPasswordInput,
     newPasswordInput,
     confirmPasswordInput,
@@ -174,6 +229,9 @@ function setFormDisabled(disabled) {
     changePasswordButton,
     deleteAccountButton
   ].forEach((element) => {
+    element.disabled = disabled;
+  });
+  nameAliasesList.querySelectorAll("input, button").forEach((element) => {
     element.disabled = disabled;
   });
 }

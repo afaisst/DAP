@@ -36,8 +36,16 @@ await pool.query(`
     orcid TEXT NOT NULL DEFAULT '',
     is_admin BOOLEAN NOT NULL DEFAULT FALSE,
     favorites JSONB NOT NULL DEFAULT '[]'::jsonb,
+    name_aliases JSONB NOT NULL DEFAULT '[]'::jsonb,
+    suggestions JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )
+`);
+
+await pool.query(`
+  ALTER TABLE dap_users
+    ADD COLUMN IF NOT EXISTS name_aliases JSONB NOT NULL DEFAULT '[]'::jsonb,
+    ADD COLUMN IF NOT EXISTS suggestions JSONB NOT NULL DEFAULT '[]'::jsonb
 `);
 
 for (const user of store.users) {
@@ -51,9 +59,11 @@ for (const user of store.users) {
       orcid,
       is_admin,
       favorites,
+      name_aliases,
+      suggestions,
       created_at
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, COALESCE($9::timestamptz, NOW()))
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, COALESCE($11::timestamptz, NOW()))
     ON CONFLICT (username_key) DO UPDATE SET
       username = EXCLUDED.username,
       password_salt = EXCLUDED.password_salt,
@@ -61,7 +71,9 @@ for (const user of store.users) {
       full_name = EXCLUDED.full_name,
       orcid = EXCLUDED.orcid,
       is_admin = EXCLUDED.is_admin,
-      favorites = EXCLUDED.favorites
+      favorites = EXCLUDED.favorites,
+      name_aliases = EXCLUDED.name_aliases,
+      suggestions = EXCLUDED.suggestions
   `, [
     user.username,
     user.usernameKey,
@@ -71,6 +83,8 @@ for (const user of store.users) {
     user.orcid || "",
     Boolean(user.isAdmin),
     JSON.stringify(Array.isArray(user.favorites) ? user.favorites : []),
+    JSON.stringify(Array.isArray(user.nameAliases) ? user.nameAliases : []),
+    JSON.stringify(Array.isArray(user.suggestions) ? user.suggestions : []),
     user.createdAt || null
   ]);
 }

@@ -217,9 +217,15 @@ async function ensurePostgresSchema() {
         orcid TEXT NOT NULL DEFAULT '',
         is_admin BOOLEAN NOT NULL DEFAULT FALSE,
         favorites JSONB NOT NULL DEFAULT '[]'::jsonb,
+        name_aliases JSONB NOT NULL DEFAULT '[]'::jsonb,
+        suggestions JSONB NOT NULL DEFAULT '[]'::jsonb,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
-    `));
+    `).then(() => pool.query(`
+      ALTER TABLE dap_users
+        ADD COLUMN IF NOT EXISTS name_aliases JSONB NOT NULL DEFAULT '[]'::jsonb,
+        ADD COLUMN IF NOT EXISTS suggestions JSONB NOT NULL DEFAULT '[]'::jsonb
+    `)));
   }
 
   return postgresSchemaPromise;
@@ -235,6 +241,8 @@ function rowToUser(row) {
     orcid: row.orcid || "",
     isAdmin: Boolean(row.is_admin),
     favorites: Array.isArray(row.favorites) ? row.favorites : [],
+    nameAliases: Array.isArray(row.name_aliases) ? row.name_aliases : [],
+    suggestions: Array.isArray(row.suggestions) ? row.suggestions : [],
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
   };
 }
@@ -275,9 +283,11 @@ async function writePostgresUserStore(store) {
             orcid,
             is_admin,
             favorites,
+            name_aliases,
+            suggestions,
             created_at
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, COALESCE($9::timestamptz, NOW()))
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, COALESCE($11::timestamptz, NOW()))
           ON CONFLICT (username_key) DO UPDATE SET
             username = EXCLUDED.username,
             password_salt = EXCLUDED.password_salt,
@@ -285,7 +295,9 @@ async function writePostgresUserStore(store) {
             full_name = EXCLUDED.full_name,
             orcid = EXCLUDED.orcid,
             is_admin = EXCLUDED.is_admin,
-            favorites = EXCLUDED.favorites
+            favorites = EXCLUDED.favorites,
+            name_aliases = EXCLUDED.name_aliases,
+            suggestions = EXCLUDED.suggestions
         `, [
           user.username,
           user.usernameKey,
@@ -295,6 +307,8 @@ async function writePostgresUserStore(store) {
           user.orcid || "",
           Boolean(user.isAdmin),
           JSON.stringify(Array.isArray(user.favorites) ? user.favorites : []),
+          JSON.stringify(Array.isArray(user.nameAliases) ? user.nameAliases : []),
+          JSON.stringify(Array.isArray(user.suggestions) ? user.suggestions : []),
           user.createdAt || null
         ]);
       }
@@ -349,10 +363,12 @@ function sanitizeProfileFields(payload) {
   const orcid = typeof payload?.orcid === "string"
     ? payload.orcid.trim().replace(/^https?:\/\/orcid\.org\//i, "").replace(/[^0-9X-]/gi, "").slice(0, 19)
     : "";
+  const nameAliases = sanitizeNameAliases(payload?.nameAliases);
 
   return {
     fullName,
-    orcid
+    orcid,
+    nameAliases
   };
 }
 
@@ -361,7 +377,51 @@ function serializeUser(user) {
     username: user.username,
     fullName: user.fullName || "",
     orcid: user.orcid || "",
+    nameAliases: sanitizeNameAliases(user.nameAliases),
     isAdmin: isAdminUser(user)
+  };
+}
+
+function sanitizeNameAliases(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const seen = new Set();
+  return value
+    .map((entry) => typeof entry === "string" ? entry.trim().replace(/\s+/g, " ").slice(0, 120) : "")
+    .filter(Boolean)
+    .filter((entry) => {
+      const key = entry.toLowerCase();
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 20);
+}
+
+function serializePublicUser(user) {
+  return {
+    username: user.username,
+    fullName: user.fullName || ""
+  };
+}
+
+function sanitizeSuggestionPaper(paper, suggestedBy) {
+  const sanitizedPaper = sanitizeFavoritePaper(paper);
+
+  if (!sanitizedPaper) {
+    return null;
+  }
+
+  return {
+    ...sanitizedPaper,
+    suggestedBy,
+    suggestedAt: new Date().toISOString()
   };
 }
 
@@ -445,6 +505,8 @@ async function handleSignup(req, res) {
     fullName: "",
     orcid: "",
     favorites: [],
+    nameAliases: [],
+    suggestions: [],
     createdAt: new Date().toISOString()
   });
   await writeUserStore(store);
@@ -541,11 +603,97 @@ async function handleProfile(req, res) {
     return json(res, 400, { error: "Invalid JSON body." });
   }
 
-  const { fullName, orcid } = sanitizeProfileFields(payload);
+  const { fullName, orcid, nameAliases } = sanitizeProfileFields(payload);
   auth.user.fullName = fullName;
   auth.user.orcid = orcid;
+  auth.user.nameAliases = nameAliases;
   await writeUserStore(auth.store);
   return json(res, 200, { user: serializeUser(auth.user) });
+}
+
+async function handleUsers(req, res) {
+  const auth = await getUserFromSession(req, res);
+
+  if (!auth) {
+    return;
+  }
+
+  if (req.method !== "GET") {
+    return json(res, 405, { error: "Method not allowed." });
+  }
+
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const query = (url.searchParams.get("q") || "").trim().toLowerCase();
+
+  if (query.length < 1) {
+    return json(res, 200, { users: [] });
+  }
+
+  const users = auth.store.users
+    .filter((user) => user.usernameKey !== auth.user.usernameKey)
+    .filter((user) => `${user.username} ${user.fullName || ""}`.toLowerCase().includes(query))
+    .sort((left, right) => left.username.localeCompare(right.username))
+    .slice(0, 8)
+    .map(serializePublicUser);
+
+  return json(res, 200, { users });
+}
+
+async function handleSuggestions(req, res) {
+  const auth = await getUserFromSession(req, res);
+
+  if (!auth) {
+    return;
+  }
+
+  if (req.method === "GET") {
+    return json(res, 200, {
+      suggestions: Array.isArray(auth.user.suggestions) ? auth.user.suggestions : []
+    });
+  }
+
+  if (req.method !== "POST") {
+    return json(res, 405, { error: "Method not allowed." });
+  }
+
+  let payload;
+
+  try {
+    payload = await readJsonBody(req);
+  } catch {
+    return json(res, 400, { error: "Invalid JSON body." });
+  }
+
+  const recipientUsername = typeof payload.recipientUsername === "string" ? payload.recipientUsername.trim() : "";
+  const recipientKey = normalizeUsername(recipientUsername);
+
+  if (!recipientKey) {
+    return json(res, 400, { error: "Choose a user to suggest this paper to." });
+  }
+
+  if (recipientKey === auth.user.usernameKey) {
+    return json(res, 400, { error: "Choose another user." });
+  }
+
+  const recipient = auth.store.users.find((user) => user.usernameKey === recipientKey);
+
+  if (!recipient) {
+    return json(res, 404, { error: "That user does not exist." });
+  }
+
+  const suggestion = sanitizeSuggestionPaper(payload.paper, serializePublicUser(auth.user));
+
+  if (!suggestion) {
+    return json(res, 400, { error: "Could not read that paper." });
+  }
+
+  const existing = Array.isArray(recipient.suggestions) ? recipient.suggestions : [];
+  recipient.suggestions = [
+    suggestion,
+    ...existing.filter((entry) => !(entry?.id === suggestion.id && normalizeUsername(entry?.suggestedBy?.username || "") === auth.user.usernameKey))
+  ].slice(0, 500);
+  await writeUserStore(auth.store);
+  return json(res, 200, { ok: true });
 }
 
 async function handlePassword(req, res) {
@@ -894,6 +1042,14 @@ async function handleAuth(req, res) {
     return handleProfile(req, res);
   }
 
+  if (url.pathname === "/api/users") {
+    return handleUsers(req, res);
+  }
+
+  if (url.pathname === "/api/suggestions") {
+    return handleSuggestions(req, res);
+  }
+
   if (url.pathname === "/api/password") {
     return handlePassword(req, res);
   }
@@ -950,6 +1106,8 @@ const server = http.createServer((req, res) => {
     || req.url?.startsWith("/api/logout")
     || req.url?.startsWith("/api/favorites")
     || req.url?.startsWith("/api/profile")
+    || req.url?.startsWith("/api/users")
+    || req.url?.startsWith("/api/suggestions")
     || req.url?.startsWith("/api/password")
     || req.url?.startsWith("/api/account")
     || req.url?.startsWith("/api/admin/users")) {

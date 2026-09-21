@@ -83,11 +83,18 @@ const myPapersTopic = {
   terms: []
 };
 
+const suggestedTopic = {
+  id: "suggested",
+  label: "Suggested Papers",
+  terms: []
+};
+
 const favoritesStorageKey = "daily-astro-ph:favorites";
 
 const state = {
   papers: [],
   favorites: [],
+  suggestions: [],
   selectedDate: formatDateInputValue(new Date()),
   search: "",
   activeCategories: new Set(astroPhCategories.map((category) => category.id)),
@@ -123,6 +130,13 @@ const bibtexCloseButton = document.querySelector("#bibtexCloseButton");
 const bibtexText = document.querySelector("#bibtexText");
 const bibtexAdsLink = document.querySelector("#bibtexAdsLink");
 const bibtexCopyButton = document.querySelector("#bibtexCopyButton");
+const suggestModal = document.querySelector("#suggestModal");
+const suggestModalTitle = document.querySelector("#suggestModalTitle");
+const suggestCloseButton = document.querySelector("#suggestCloseButton");
+const suggestUserInput = document.querySelector("#suggestUserInput");
+const suggestUserResults = document.querySelector("#suggestUserResults");
+const suggestSendButton = document.querySelector("#suggestSendButton");
+const suggestStatus = document.querySelector("#suggestStatus");
 const authStatus = document.querySelector("#authStatus");
 const usernameInput = document.querySelector("#usernameInput");
 const passwordInput = document.querySelector("#passwordInput");
@@ -136,6 +150,12 @@ const authorMetadataLookups = new Map();
 const figureState = {
   figures: [],
   index: 0
+};
+
+const suggestState = {
+  paper: null,
+  selectedUser: null,
+  searchController: null
 };
 
 dateInput.value = state.selectedDate;
@@ -161,6 +181,9 @@ nextFigureButton.addEventListener("click", () => showFigure(figureState.index + 
 summaryCloseButton.addEventListener("click", () => summaryModal.close());
 bibtexCloseButton.addEventListener("click", () => bibtexModal.close());
 bibtexCopyButton.addEventListener("click", () => copyBibtex());
+suggestCloseButton.addEventListener("click", () => suggestModal.close());
+suggestUserInput.addEventListener("input", () => searchSuggestUsers());
+suggestSendButton.addEventListener("click", () => sendSuggestion());
 loginButton.addEventListener("click", () => submitAuth("/api/login"));
 signupButton.addEventListener("click", () => submitAuth("/api/signup"));
 logoutButton.addEventListener("click", logout);
@@ -288,11 +311,19 @@ function render() {
     .filter((group) => group.papers.length);
   const myPapers = filtered.filter(paperMatchesProfile);
   const favoritePapers = getFavoritePapers().filter(matchesSearch);
+  const suggestedPapers = getSuggestedPapers().filter(matchesSearch);
 
   if (myPapers.length) {
     grouped.unshift({
       topic: myPapersTopic,
       papers: [...myPapers].sort((a, b) => new Date(b.published) - new Date(a.published))
+    });
+  }
+
+  if (suggestedPapers.length) {
+    grouped.unshift({
+      topic: suggestedTopic,
+      papers: suggestedPapers
     });
   }
 
@@ -374,6 +405,7 @@ function renderPaper(paper) {
   const xShareLink = node.querySelector(".x-share-link");
   const facebookShareLink = node.querySelector(".facebook-share-link");
   const linkedinShareLink = node.querySelector(".linkedin-share-link");
+  const suggestButton = node.querySelector(".suggest-button");
   const libraryMenu = node.querySelector(".library-menu");
   const zoteroLibraryLink = node.querySelector(".zotero-library-link");
   const papersLibraryLink = node.querySelector(".papers-library-link");
@@ -385,12 +417,15 @@ function renderPaper(paper) {
 
   title.href = paper.url;
   title.textContent = paper.title;
-  meta.textContent = `${formatDate(paper.published.slice(0, 10))} · ${paper.categories.join(", ") || "astro-ph"}`;
+  meta.textContent = paper.suggestedBy
+    ? `${formatDate(paper.published.slice(0, 10))} · ${paper.categories.join(", ") || "astro-ph"} · Suggested by ${paper.suggestedBy.fullName || paper.suggestedBy.username}`
+    : `${formatDate(paper.published.slice(0, 10))} · ${paper.categories.join(", ") || "astro-ph"}`;
   abstract.textContent = paper.abstract;
   node.classList.toggle("paper-card--author-match", paperMatchesProfile(paper));
   updateFavoriteButton(favoriteButton, paper);
   favoriteButton.addEventListener("click", () => toggleFavorite(paper));
   copyButton.addEventListener("click", () => copyPaperLink(copyButton, paper.url, shareMenu));
+  suggestButton.addEventListener("click", () => openSuggestModal(paper, shareMenu));
   setShareLinks(paper, { emailShareLink, xShareLink, facebookShareLink, linkedinShareLink });
   setLibraryLinks(paper, { zoteroLibraryLink, papersLibraryLink, adsBibtexLink });
   bibtexButton.addEventListener("click", () => openBibtexModal(paper, libraryMenu));
@@ -446,12 +481,15 @@ async function loadSession() {
 
     if (state.sessionUser) {
       await loadRemoteFavorites(true);
+      await loadSuggestions();
     } else {
       state.favorites = loadLocalFavorites();
+      state.suggestions = [];
     }
   } catch {
     state.sessionUser = null;
     state.favorites = loadLocalFavorites();
+    state.suggestions = [];
   }
 
   updateAuthUi();
@@ -486,6 +524,7 @@ async function submitAuth(endpoint) {
     state.sessionUser = data.user;
     passwordInput.value = "";
     await loadRemoteFavorites(true);
+    await loadSuggestions();
     updateAuthUi();
     render();
   } catch (error) {
@@ -506,10 +545,22 @@ async function logout() {
 
   state.sessionUser = null;
   state.favorites = loadLocalFavorites();
+  state.suggestions = [];
   passwordInput.value = "";
   updateAuthUi();
   render();
   logoutButton.disabled = false;
+}
+
+async function loadSuggestions() {
+  const response = await fetch("/api/suggestions");
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || "Could not load suggested papers.");
+  }
+
+  state.suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
 }
 
 async function loadRemoteFavorites(mergeLocal = false) {
@@ -569,6 +620,16 @@ function mergeFavorites(primaryFavorites, secondaryFavorites) {
 
 function getFavoritePapers() {
   return [...state.favorites].sort((a, b) => new Date(b.favoritedAt || b.published) - new Date(a.favoritedAt || a.published));
+}
+
+function getSuggestedPapers() {
+  return [...state.suggestions]
+    .map((paper) => ({
+      ...paper,
+      topic: paper.topic || fallbackTopic,
+      relevance: Number.isFinite(Number(paper.relevance)) ? Number(paper.relevance) : 0
+    }))
+    .sort((a, b) => new Date(b.suggestedAt || b.published) - new Date(a.suggestedAt || a.published));
 }
 
 async function enrichVisiblePaperAuthors(papers) {
@@ -740,13 +801,18 @@ function paperMatchesProfile(paper) {
     }
   }
 
-  const profileName = extractNameSignature(state.sessionUser.fullName || "");
+  const profileNames = [state.sessionUser.fullName, ...(state.sessionUser.nameAliases || [])]
+    .map((name) => extractNameSignature(name || ""))
+    .filter(Boolean);
 
-  if (!profileName) {
+  if (!profileNames.length) {
     return false;
   }
 
-  return paper.authors.some((author) => sameNameSignature(extractNameSignature(author), profileName));
+  return paper.authors.some((author) => {
+    const authorName = extractNameSignature(author);
+    return profileNames.some((profileName) => sameNameSignature(authorName, profileName));
+  });
 }
 
 function renderCategoryFilters() {
@@ -788,6 +854,118 @@ function openSummaryModal(paper) {
 
   summaryModal.showModal();
   typesetMath(summaryModal);
+}
+
+function openSuggestModal(paper, shareMenu) {
+  if (!state.sessionUser) {
+    authStatus.textContent = "Log in to suggest papers to other users.";
+    shareMenu.open = false;
+    return;
+  }
+
+  suggestState.paper = paper;
+  suggestState.selectedUser = null;
+  suggestModalTitle.textContent = paper.title;
+  suggestUserInput.value = "";
+  suggestUserResults.innerHTML = "";
+  suggestStatus.textContent = "";
+  suggestSendButton.disabled = true;
+  shareMenu.open = false;
+  suggestModal.showModal();
+  suggestUserInput.focus();
+}
+
+async function searchSuggestUsers() {
+  const query = suggestUserInput.value.trim();
+  suggestState.selectedUser = null;
+  suggestSendButton.disabled = true;
+  suggestStatus.textContent = "";
+
+  if (suggestState.searchController) {
+    suggestState.searchController.abort();
+  }
+
+  if (!query) {
+    suggestUserResults.innerHTML = "";
+    return;
+  }
+
+  const controller = new AbortController();
+  suggestState.searchController = controller;
+
+  try {
+    const response = await fetch(`/api/users?q=${encodeURIComponent(query)}`, {
+      signal: controller.signal
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Could not search users.");
+    }
+
+    renderSuggestUserResults(Array.isArray(data.users) ? data.users : []);
+  } catch (error) {
+    if (error.name !== "AbortError") {
+      suggestUserResults.innerHTML = "";
+      suggestStatus.textContent = error.message;
+    }
+  }
+}
+
+function renderSuggestUserResults(users) {
+  suggestUserResults.innerHTML = "";
+
+  if (!users.length) {
+    suggestUserResults.innerHTML = `<div class="suggest-empty">No matching users.</div>`;
+    return;
+  }
+
+  users.forEach((user) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "suggest-user-option";
+    button.textContent = user.fullName ? `${user.fullName} (${user.username})` : user.username;
+    button.addEventListener("click", () => {
+      suggestState.selectedUser = user;
+      suggestUserInput.value = button.textContent;
+      suggestUserResults.innerHTML = "";
+      suggestSendButton.disabled = false;
+    });
+    suggestUserResults.appendChild(button);
+  });
+}
+
+async function sendSuggestion() {
+  if (!suggestState.paper || !suggestState.selectedUser) {
+    return;
+  }
+
+  suggestSendButton.disabled = true;
+  suggestStatus.textContent = "Sending suggestion...";
+
+  try {
+    const response = await fetch("/api/suggestions", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        recipientUsername: suggestState.selectedUser.username,
+        paper: toFavoritePaper(suggestState.paper)
+      })
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Could not suggest this paper.");
+    }
+
+    suggestStatus.textContent = "Suggested.";
+    window.setTimeout(() => suggestModal.close(), 650);
+  } catch (error) {
+    suggestStatus.textContent = error.message;
+    suggestSendButton.disabled = false;
+  }
 }
 
 function buildSummaryBullets(paper) {
@@ -1164,7 +1342,7 @@ function matchesSearch(paper) {
     return true;
   }
 
-  return `${paper.title} ${paper.abstract} ${paper.authors.join(" ")} ${paper.categories.join(" ")}`
+  return `${paper.title} ${paper.abstract} ${paper.authors.join(" ")} ${paper.categories.join(" ")} ${paper.suggestedBy?.username || ""} ${paper.suggestedBy?.fullName || ""}`
     .toLowerCase()
     .includes(state.search);
 }
@@ -1230,7 +1408,11 @@ function extractNameSignature(value) {
 }
 
 function sameNameSignature(left, right) {
-  return Boolean(left && right && left.first === right.first && left.last === right.last);
+  if (!left || !right || left.last !== right.last) {
+    return false;
+  }
+
+  return left.first === right.first || left.first[0] === right.first[0];
 }
 
 function normalizeOrcid(value) {
