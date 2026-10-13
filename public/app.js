@@ -99,12 +99,18 @@ const state = {
   search: "",
   activeCategories: new Set(astroPhCategories.map((category) => category.id)),
   activeTopicId: null,
-  sessionUser: null
+  sessionUser: null,
+  calendarMonth: null
 };
 
-const dateInput = document.querySelector("#dateInput");
-const prevDateButton = document.querySelector("#prevDateButton");
-const nextDateButton = document.querySelector("#nextDateButton");
+const personalTopicIds = new Set(["favorites", "suggested", "my-papers"]);
+
+const calendarEl = document.querySelector("#calendar");
+const topicNav = document.querySelector("#topicNav");
+const selectedDateHeading = document.querySelector("#selectedDateHeading");
+const accountMenu = document.querySelector("#accountMenu");
+const accountAvatar = document.querySelector("#accountAvatar");
+const accountLabel = document.querySelector("#accountLabel");
 const searchInput = document.querySelector("#searchInput");
 const categoryFilters = document.querySelector("#categoryFilters");
 const topicList = document.querySelector("#topicList");
@@ -158,16 +164,53 @@ const suggestState = {
   searchController: null
 };
 
-dateInput.value = state.selectedDate;
+state.calendarMonth = monthStart(parseDateInputValue(state.selectedDate));
+renderCalendar();
+updateDateHeading();
 renderCategoryFilters();
 
-dateInput.addEventListener("change", () => {
-  state.selectedDate = dateInput.value;
-  loadPapers();
+calendarEl.addEventListener("click", (event) => {
+  const target = event.target.closest("button");
+
+  if (!target || target.disabled) {
+    return;
+  }
+
+  if (target.dataset.date) {
+    selectDate(target.dataset.date);
+  } else if (target.dataset.monthStep) {
+    shiftCalendarMonth(Number(target.dataset.monthStep));
+  } else if (target.dataset.dayStep) {
+    shiftSelectedDate(Number(target.dataset.dayStep));
+  } else if (target.dataset.action === "today") {
+    selectDate(formatDateInputValue(new Date()));
+  }
 });
 
-prevDateButton.addEventListener("click", () => shiftSelectedDate(-1));
-nextDateButton.addEventListener("click", () => shiftSelectedDate(1));
+document.addEventListener("keydown", (event) => {
+  const tag = event.target.tagName;
+
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(tag) || event.target.isContentEditable || document.querySelector("dialog[open]")) {
+    return;
+  }
+
+  if (event.key === "ArrowLeft" && !event.metaKey && !event.altKey) {
+    shiftSelectedDate(-1);
+  } else if (event.key === "ArrowRight" && !event.metaKey && !event.altKey) {
+    shiftSelectedDate(1);
+  } else if (event.key === "/") {
+    event.preventDefault();
+    searchInput.focus();
+  }
+});
+
+document.addEventListener("click", (event) => {
+  document.querySelectorAll("details.share-menu[open], details.library-menu[open], details.account-menu[open]").forEach((menu) => {
+    if (!menu.contains(event.target)) {
+      menu.open = false;
+    }
+  });
+});
 
 searchInput.addEventListener("input", () => {
   state.search = searchInput.value.trim().toLowerCase();
@@ -204,7 +247,8 @@ async function init() {
 }
 
 async function loadPapers() {
-  topicList.innerHTML = "";
+  topicList.innerHTML = loadingSkeleton();
+  topicNav.innerHTML = `<div class="topic-nav-loading"><span></span><span></span><span></span><span></span><span></span></div>`;
   setStatus(`Loading astro-ph papers for ${formatDate(state.selectedDate)}...`);
 
   try {
@@ -220,6 +264,7 @@ async function loadPapers() {
     render();
   } catch (error) {
     state.papers = [];
+    topicNav.innerHTML = "";
     topicList.innerHTML = `<div class="empty error">Could not load papers. ${escapeHtml(error.message)}</div>`;
     setStatus("arXiv is unreachable from this local server right now.");
   }
@@ -228,9 +273,97 @@ async function loadPapers() {
 function shiftSelectedDate(dayOffset) {
   const date = parseDateInputValue(state.selectedDate);
   date.setDate(date.getDate() + dayOffset);
-  state.selectedDate = formatDateInputValue(date);
-  dateInput.value = state.selectedDate;
+  selectDate(formatDateInputValue(date));
+}
+
+function selectDate(value) {
+  const today = formatDateInputValue(new Date());
+
+  if (value > today || value === state.selectedDate) {
+    return;
+  }
+
+  state.selectedDate = value;
+  state.calendarMonth = monthStart(parseDateInputValue(value));
+  renderCalendar();
+  updateDateHeading();
   loadPapers();
+}
+
+function shiftCalendarMonth(monthOffset) {
+  const next = new Date(state.calendarMonth);
+  next.setMonth(next.getMonth() + monthOffset);
+  const currentMonth = monthStart(new Date());
+  state.calendarMonth = next > currentMonth ? currentMonth : next;
+  renderCalendar();
+}
+
+function monthStart(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1, 12);
+}
+
+function updateDateHeading() {
+  selectedDateHeading.textContent = new Intl.DateTimeFormat(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric"
+  }).format(parseDateInputValue(state.selectedDate));
+}
+
+function renderCalendar() {
+  const month = state.calendarMonth;
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const today = formatDateInputValue(new Date());
+  const isCurrentMonth = monthStart(new Date()).getTime() === month.getTime();
+  const leadingBlanks = (new Date(year, monthIndex, 1, 12).getDay() + 6) % 7;
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const monthLabel = new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(month);
+  const weekdayLabels = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+  const chevron = (direction) => `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="${direction < 0 ? "M10 3.5L5.5 8l4.5 4.5" : "M6 3.5L10.5 8 6 12.5"}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const doubleChevron = (direction) => `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="${direction < 0 ? "M8 3.5L3.5 8 8 12.5M12.5 3.5L8 8l4.5 4.5" : "M3.5 3.5L8 8l-4.5 4.5M8 3.5l4.5 4.5L8 12.5"}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+  let cells = "";
+
+  for (let blank = 0; blank < leadingBlanks; blank += 1) {
+    cells += `<span class="cal-day cal-day--blank" aria-hidden="true"></span>`;
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const value = formatDateInputValue(new Date(year, monthIndex, day, 12));
+    const weekday = (leadingBlanks + day - 1) % 7;
+    const classes = ["cal-day"];
+
+    if (weekday >= 5) classes.push("cal-day--weekend");
+    if (value === today) classes.push("cal-day--today");
+    if (value === state.selectedDate) classes.push("cal-day--selected");
+
+    cells += `<button type="button" class="${classes.join(" ")}" data-date="${value}" ${value > today ? "disabled" : ""} aria-label="${formatDate(value)}" ${value === state.selectedDate ? 'aria-current="date"' : ""}>${day}</button>`;
+  }
+
+  calendarEl.innerHTML = `
+    <div class="cal-header">
+      <button type="button" class="cal-nav" data-month-step="-12" title="Previous year" aria-label="Previous year">${doubleChevron(-1)}</button>
+      <button type="button" class="cal-nav" data-month-step="-1" title="Previous month" aria-label="Previous month">${chevron(-1)}</button>
+      <span class="cal-title">${escapeHtml(monthLabel)}</span>
+      <button type="button" class="cal-nav" data-month-step="1" title="Next month" aria-label="Next month" ${isCurrentMonth ? "disabled" : ""}>${chevron(1)}</button>
+      <button type="button" class="cal-nav" data-month-step="12" title="Next year" aria-label="Next year" ${isCurrentMonth ? "disabled" : ""}>${doubleChevron(1)}</button>
+    </div>
+    <div class="cal-grid">
+      ${weekdayLabels.map((label, index) => `<span class="cal-weekday${index >= 5 ? " cal-weekday--weekend" : ""}">${label}</span>`).join("")}
+      ${cells}
+    </div>
+    <div class="cal-footer">
+      <button type="button" class="cal-step" data-day-step="-1" title="Previous day (←)">${chevron(-1)} Prev day</button>
+      <button type="button" class="cal-today" data-action="today" ${state.selectedDate === today ? "disabled" : ""}>Today</button>
+      <button type="button" class="cal-step" data-day-step="1" title="Next day (→)" ${state.selectedDate >= today ? "disabled" : ""}>Next day ${chevron(1)}</button>
+    </div>
+  `;
+}
+
+function loadingSkeleton() {
+  return `<div class="skeleton-list" aria-label="Loading papers">${'<div class="skeleton-card"><span></span><span></span><span></span></div>'.repeat(4)}</div>`;
 }
 
 function formatDateInputValue(date) {
@@ -337,6 +470,7 @@ function render() {
   setStatus(statusMessage(filtered.length, state.papers.length));
 
   if (!grouped.length) {
+    topicNav.innerHTML = "";
     topicList.innerHTML = `<div class="empty">No papers match this date and search.</div>`;
     return;
   }
@@ -347,32 +481,7 @@ function render() {
     state.activeTopicId = grouped[0].topic.id;
   }
 
-  const topicButtons = document.createElement("section");
-  topicButtons.className = "topic-button-grid";
-  topicButtons.setAttribute("aria-label", "Topics");
-
-  grouped.forEach((group) => {
-    const button = document.createElement("button");
-    const isActive = group.topic.id === state.activeTopicId;
-    button.className = "topic-tile";
-    button.dataset.topic = group.topic.id;
-    button.type = "button";
-    button.setAttribute("aria-pressed", String(isActive));
-    button.innerHTML = `
-      <span class="topic-name">${escapeHtml(group.topic.label)}</span>
-      <span class="topic-count">${group.papers.length}</span>
-      <span class="topic-count-label">${group.papers.length === 1 ? "paper" : "papers"}</span>
-    `;
-
-    button.addEventListener("click", () => {
-      state.activeTopicId = group.topic.id;
-      render();
-    });
-
-    topicButtons.appendChild(button);
-  });
-
-  topicList.appendChild(topicButtons);
+  renderTopicNav(grouped);
 
   const activeGroup = grouped.find((group) => group.topic.id === state.activeTopicId);
   const panel = document.createElement("section");
@@ -380,7 +489,7 @@ function render() {
   panel.dataset.topic = activeGroup.topic.id;
   panel.innerHTML = `
     <div class="active-topic-heading">
-      <h2>${escapeHtml(activeGroup.topic.label)}</h2>
+      <h2><span class="topic-dot" aria-hidden="true"></span>${escapeHtml(activeGroup.topic.label)}</h2>
       <span>${activeGroup.papers.length} ${activeGroup.papers.length === 1 ? "paper" : "papers"}</span>
     </div>
     <div class="papers-grid"></div>
@@ -391,6 +500,72 @@ function render() {
   topicList.appendChild(panel);
   typesetMath(topicList);
   void enrichVisiblePaperAuthors(activeGroup.papers);
+}
+
+function renderTopicNav(grouped) {
+  topicNav.innerHTML = "";
+  const sections = [
+    { title: "Your library", groups: grouped.filter((group) => personalTopicIds.has(group.topic.id)) },
+    { title: "Science topics", groups: grouped.filter((group) => !personalTopicIds.has(group.topic.id)) }
+  ];
+
+  sections.filter((section) => section.groups.length).forEach((section) => {
+    const wrapper = document.createElement("div");
+    wrapper.className = "topic-nav-section";
+    wrapper.innerHTML = `<div class="topic-nav-title">${section.title}</div>`;
+    const list = document.createElement("div");
+    list.className = "topic-nav-list";
+
+    section.groups.forEach((group) => {
+      const button = document.createElement("button");
+      const isActive = group.topic.id === state.activeTopicId;
+      button.type = "button";
+      button.className = "topic-link";
+      button.dataset.topic = group.topic.id;
+      button.setAttribute("aria-pressed", String(isActive));
+      button.innerHTML = `
+        <span class="topic-dot" aria-hidden="true"></span>
+        <span class="topic-link-label">${escapeHtml(group.topic.label)}</span>
+        <span class="topic-link-count">${group.papers.length}</span>
+      `;
+      button.addEventListener("click", () => {
+        state.activeTopicId = group.topic.id;
+        render();
+
+        if (topicList.getBoundingClientRect().top < 0) {
+          topicList.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      });
+      list.appendChild(button);
+    });
+
+    wrapper.appendChild(list);
+    topicNav.appendChild(wrapper);
+  });
+}
+
+function renderPaperMeta(meta, paper) {
+  meta.textContent = "";
+  const date = document.createElement("span");
+  date.className = "meta-date";
+  date.textContent = formatDate(paper.published.slice(0, 10));
+  meta.appendChild(date);
+
+  (paper.categories.length ? paper.categories : ["astro-ph"]).forEach((category, index) => {
+    const pill = document.createElement("span");
+    pill.className = `cat-pill${index === 0 ? " cat-pill--primary" : ""}`;
+    pill.dataset.category = category;
+    pill.textContent = category.replace(/^astro-ph\./, "");
+    pill.title = category;
+    meta.appendChild(pill);
+  });
+
+  if (paper.suggestedBy) {
+    const suggested = document.createElement("span");
+    suggested.className = "meta-suggested";
+    suggested.textContent = `Suggested by ${paper.suggestedBy.fullName || paper.suggestedBy.username}`;
+    meta.appendChild(suggested);
+  }
 }
 
 function renderPaper(paper) {
@@ -417,9 +592,7 @@ function renderPaper(paper) {
 
   title.href = paper.url;
   title.textContent = paper.title;
-  meta.textContent = paper.suggestedBy
-    ? `${formatDate(paper.published.slice(0, 10))} · ${paper.categories.join(", ") || "astro-ph"} · Suggested by ${paper.suggestedBy.fullName || paper.suggestedBy.username}`
-    : `${formatDate(paper.published.slice(0, 10))} · ${paper.categories.join(", ") || "astro-ph"}`;
+  renderPaperMeta(meta, paper);
   abstract.textContent = paper.abstract;
   node.classList.toggle("paper-card--author-match", paperMatchesProfile(paper));
   updateFavoriteButton(favoriteButton, paper);
@@ -752,13 +925,26 @@ function updateAuthUi() {
   adminLink.hidden = !(loggedIn && state.sessionUser?.isAdmin);
   logoutButton.hidden = !loggedIn;
 
+  accountMenu.open = false;
+  accountMenu.classList.toggle("account-menu--signed-in", loggedIn);
+
   if (loggedIn) {
+    const displayName = firstAndLastName(state.sessionUser.fullName || "") || state.sessionUser.username;
+    accountLabel.textContent = displayName;
+    accountAvatar.textContent = initials(displayName);
     authStatus.textContent = welcomeMessage(state.sessionUser);
     usernameInput.value = state.sessionUser.username;
   } else {
+    accountLabel.textContent = "Log in";
+    accountAvatar.innerHTML = `<svg viewBox="0 0 20 20" width="16" height="16"><circle cx="10" cy="7" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.8 17c.8-3.2 3.3-5 6.2-5s5.4 1.8 6.2 5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`;
     authStatus.textContent = "Anonymous mode. Favorites stay in this browser until you log in.";
     usernameInput.value = "";
   }
+}
+
+function initials(name) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] || "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "?";
 }
 
 function welcomeMessage(user) {
@@ -822,9 +1008,10 @@ function renderCategoryFilters() {
     const label = document.createElement("label");
     label.className = "category-filter";
     label.dataset.category = category.id;
+    label.title = category.id;
     label.innerHTML = `
       <input type="checkbox" value="${category.id}" checked>
-      <span>${category.id}</span>
+      <span><strong>${category.id.replace("astro-ph.", "")}</strong> ${category.label}</span>
     `;
 
     const checkbox = label.querySelector("input");

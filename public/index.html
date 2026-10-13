@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Daily AstroPH</title>
+    <meta name="color-scheme" content="light dark">
     <link rel="stylesheet" href="/styles.css">
     <script>
       window.MathJax = {
@@ -22,95 +23,92 @@
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
   </head>
   <body>
-    <main class="app-shell">
-      <section class="topbar" aria-label="Paper controls">
-        <div class="topbar-main">
-          <div>
-            <p class="eyebrow">arXiv astro-ph daily reader</p>
-            <h1>Daily AstroPH</h1>
-          </div>
+    <header class="app-header">
+      <div class="app-header-inner">
+        <a class="brand" href="/" aria-label="Daily AstroPH home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" width="30" height="30"><circle cx="16" cy="16" r="5.5" fill="currentColor"/><ellipse cx="16" cy="16" rx="13" ry="5.2" fill="none" stroke="currentColor" stroke-width="1.8" transform="rotate(-24 16 16)"/><circle cx="27" cy="10.6" r="1.8" fill="currentColor"/></svg>
+          </span>
+          <span class="brand-text">
+            <span class="brand-name">Daily AstroPH</span>
+            <span class="brand-sub">arXiv astro-ph daily reader</span>
+          </span>
+        </a>
 
-          <section class="auth-panel" aria-label="Account access">
-            <div id="authStatus" class="auth-status">Checking local account status...</div>
+        <details id="accountMenu" class="account-menu">
+          <summary class="account-trigger">
+            <span id="accountAvatar" class="avatar" aria-hidden="true"></span>
+            <span id="accountLabel" class="account-label">Log in</span>
+            <svg class="chevron" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </summary>
+          <section class="account-popover" aria-label="Account access">
+            <div id="authStatus" class="auth-status">Checking account status...</div>
             <div class="auth-form">
               <input id="usernameInput" type="text" placeholder="Username" autocomplete="username">
               <input id="passwordInput" type="password" placeholder="Password" autocomplete="current-password">
               <div class="auth-actions">
-                <button id="loginButton" type="button">Log in</button>
-                <button id="signupButton" type="button">Sign up</button>
-                <a id="profileLink" class="auth-link-button" href="/profile.html" hidden>User profile</a>
-                <a id="adminLink" class="auth-link-button" href="/admin.html" hidden>Admin</a>
-                <button id="logoutButton" type="button" hidden>Log out</button>
+                <button id="loginButton" class="btn btn-primary" type="button">Log in</button>
+                <button id="signupButton" class="btn" type="button">Sign up</button>
               </div>
+              <nav class="account-links">
+                <a id="profileLink" class="menu-link" href="/profile.html" hidden>User profile</a>
+                <a id="adminLink" class="menu-link" href="/admin.html" hidden>Admin</a>
+                <button id="logoutButton" class="menu-link menu-link--danger" type="button" hidden>Log out</button>
+              </nav>
             </div>
           </section>
-        </div>
+        </details>
+      </div>
+    </header>
 
-        <div class="controls">
-          <label class="field">
-            <span>Date of Submission</span>
-            <span class="date-control">
-              <button id="prevDateButton" class="date-step-button" type="button" aria-label="Previous day">&lt;</button>
-              <input id="dateInput" type="date">
-              <button id="nextDateButton" class="date-step-button" type="button" aria-label="Next day">&gt;</button>
-            </span>
+    <div class="app-layout">
+      <aside class="sidebar" aria-label="Date and topics">
+        <section class="card calendar-card" aria-label="Date of submission">
+          <div id="calendar" class="calendar"></div>
+        </section>
+
+        <nav id="topicNav" class="topic-nav" aria-label="Topics"></nav>
+      </aside>
+
+      <main class="main-column">
+        <section class="day-header">
+          <div>
+            <p class="day-kicker">Submissions for</p>
+            <h1 id="selectedDateHeading">&nbsp;</h1>
+          </div>
+          <div class="day-status">
+            <span id="statusText">Loading papers...</span>
+            <button id="refreshButton" class="icon-btn" type="button" title="Refresh papers" aria-label="Refresh papers">
+              <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M16 10a6 6 0 1 1-1.8-4.3M16 3.5v3.7h-3.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </section>
+
+        <section class="card toolbar" aria-label="Paper filters">
+          <label class="search-box">
+            <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="9" cy="9" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M13.2 13.2L17 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <input id="searchInput" type="search" placeholder="Search titles, authors, abstracts..." aria-label="Search papers">
           </label>
+          <div class="filter-row">
+            <span class="filter-heading">Classifications</span>
+            <div id="categoryFilters" class="category-filters"></div>
+          </div>
+        </section>
 
-          <label class="field search-field">
-            <span>Search</span>
-            <input id="searchInput" type="search" placeholder="Title, author, abstract...">
-          </label>
-        </div>
-      </section>
-
-      <section class="status-row">
-        <div id="statusText">Loading papers...</div>
-        <button id="refreshButton" type="button" title="Refresh papers">Refresh</button>
-      </section>
-
-      <section class="category-filter-panel" aria-label="arXiv classification filters">
-        <div class="filter-heading">Classifications</div>
-        <div id="categoryFilters" class="category-filters"></div>
-      </section>
-
-      <section id="topicList" class="topic-list" aria-live="polite"></section>
-    </main>
+        <section id="topicList" class="topic-list" aria-live="polite"></section>
+      </main>
+    </div>
 
     <template id="paperTemplate">
       <article class="paper-card">
         <div class="paper-header">
-          <div>
+          <div class="paper-heading">
             <a class="paper-title" target="_blank" rel="noreferrer"></a>
             <div class="paper-meta-row">
               <p class="paper-meta"></p>
-              <button class="favorite-button" type="button" aria-pressed="false" aria-label="Add to favorites" title="Add to favorites">☆</button>
             </div>
           </div>
-        </div>
-
-        <div class="paper-actions">
-          <details class="share-menu">
-            <summary>Share</summary>
-            <div class="share-options">
-              <button class="copy-link-button" type="button">Copy link</button>
-              <a class="email-share-link" target="_blank" rel="noreferrer">Email</a>
-              <a class="x-share-link" target="_blank" rel="noreferrer">X</a>
-              <a class="facebook-share-link" target="_blank" rel="noreferrer">Facebook</a>
-              <a class="linkedin-share-link" target="_blank" rel="noreferrer">LinkedIn</a>
-              <button class="suggest-button" type="button">Suggest</button>
-            </div>
-          </details>
-          <details class="library-menu">
-            <summary>Libraries</summary>
-            <div class="library-options">
-              <a class="zotero-library-link" target="_blank" rel="noreferrer">Add to Zotero</a>
-              <a class="papers-library-link" target="_blank" rel="noreferrer">Open for Papers/ReadCube</a>
-              <a class="ads-bibtex-link" target="_blank" rel="noreferrer">ADS BibTeX</a>
-              <button class="bibtex-button" type="button">Show BibTeX</button>
-            </div>
-          </details>
-          <button class="figures-button" type="button">Figures</button>
-          <button class="summary-button" type="button">Summary</button>
+          <button class="favorite-button" type="button" aria-pressed="false" aria-label="Add to favorites" title="Add to favorites">☆</button>
         </div>
 
         <div class="authors"></div>
@@ -119,6 +117,43 @@
           <summary>Abstract</summary>
           <p></p>
         </details>
+
+        <div class="paper-actions">
+          <button class="figures-button action-btn" type="button">
+            <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="7.5" cy="8.5" r="1.4" fill="currentColor"/><path d="M4 15l4.5-4.5 3 3 2-2L17 15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+            Figures
+          </button>
+          <button class="summary-button action-btn" type="button">
+            <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M7 6h9M7 10h9M7 14h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="10" r="1" fill="currentColor"/><circle cx="4" cy="14" r="1" fill="currentColor"/></svg>
+            Summary
+          </button>
+          <details class="share-menu">
+            <summary class="action-btn">
+              <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="14.5" cy="5" r="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="5.5" cy="10" r="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="14.5" cy="15" r="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7.5 9l5-2.8M7.5 11l5 2.8" stroke="currentColor" stroke-width="1.6"/></svg>
+              Share
+            </summary>
+            <div class="share-options menu">
+              <button class="copy-link-button" type="button">Copy link</button>
+              <a class="email-share-link" target="_blank" rel="noreferrer">Email</a>
+              <a class="x-share-link" target="_blank" rel="noreferrer">X</a>
+              <a class="facebook-share-link" target="_blank" rel="noreferrer">Facebook</a>
+              <a class="linkedin-share-link" target="_blank" rel="noreferrer">LinkedIn</a>
+              <button class="suggest-button" type="button">Suggest to a colleague</button>
+            </div>
+          </details>
+          <details class="library-menu">
+            <summary class="action-btn">
+              <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M5 3.5h10v13l-5-3.2-5 3.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+              Library
+            </summary>
+            <div class="library-options menu">
+              <a class="zotero-library-link" target="_blank" rel="noreferrer">Add to Zotero</a>
+              <a class="papers-library-link" target="_blank" rel="noreferrer">Open for Papers/ReadCube</a>
+              <a class="ads-bibtex-link" target="_blank" rel="noreferrer">ADS BibTeX</a>
+              <button class="bibtex-button" type="button">Show BibTeX</button>
+            </div>
+          </details>
+        </div>
       </article>
     </template>
 
