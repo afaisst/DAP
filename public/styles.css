@@ -31,7 +31,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0d1016;
     --surface: #151922;
     --surface-2: #1b202a;
@@ -57,6 +57,37 @@
     --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
   }
 }
+
+/* explicit dark theme */
+  :root[data-theme="dark"] {
+    --bg: #0d1016;
+    --surface: #151922;
+    --surface-2: #1b202a;
+    --surface-3: #232935;
+    --ink: #e8ebf1;
+    --ink-2: #c4c9d3;
+    --muted: #8d95a3;
+    --line: #252b36;
+    --line-strong: #333a47;
+    --accent: #8292ff;
+    --accent-strong: #a2aeff;
+    --accent-soft: rgba(130, 146, 255, 0.14);
+    --on-accent: #0d1016;
+    --gold: #f0b43c;
+    --danger: #e0644f;
+    --danger-strong: #f07d69;
+    --warn: #f0a060;
+    --highlight: rgba(240, 180, 60, 0.08);
+    --highlight-line: rgba(240, 180, 60, 0.38);
+    --header-bg: rgba(13, 16, 22, 0.8);
+    --shadow-sm: none;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+  }
+
+
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
 
 * { box-sizing: border-box; }
 
@@ -522,10 +553,16 @@ button:disabled { opacity: 0.5; }
 [data-topic="other"] { --topic-color: #7a858b; }
 
 @media (prefers-color-scheme: dark) {
-  [data-topic="my-papers"] { --topic-color: #8d95a3; }
-  [data-topic="black-holes"] { --topic-color: #8a8f99; }
-  [data-topic="dark-matter"] { --topic-color: #5b6170; }
+  :root:not([data-theme="light"]) [data-topic="my-papers"] { --topic-color: #8d95a3; }
+  :root:not([data-theme="light"]) [data-topic="black-holes"] { --topic-color: #8a8f99; }
+  :root:not([data-theme="light"]) [data-topic="dark-matter"] { --topic-color: #5b6170; }
 }
+
+/* explicit dark theme */
+  :root[data-theme="dark"] [data-topic="my-papers"] { --topic-color: #8d95a3; }
+  :root[data-theme="dark"] [data-topic="black-holes"] { --topic-color: #8a8f99; }
+  :root[data-theme="dark"] [data-topic="dark-matter"] { --topic-color: #5b6170; }
+
 
 /* ===== Day header & toolbar ===== */
 .day-header {
@@ -615,13 +652,22 @@ button:disabled { opacity: 0.5; }
 [data-category="astro-ph.EP"] { --c: #237480; }
 
 @media (prefers-color-scheme: dark) {
-  [data-category="astro-ph.CO"] { --c: #7fa6f0; }
-  [data-category="astro-ph.GA"] { --c: #6cc893; }
-  [data-category="astro-ph.HE"] { --c: #f08e6c; }
-  [data-category="astro-ph.IM"] { --c: #b29bf0; }
-  [data-category="astro-ph.SR"] { --c: #e6be5a; }
-  [data-category="astro-ph.EP"] { --c: #66c3d0; }
+  :root:not([data-theme="light"]) [data-category="astro-ph.CO"] { --c: #7fa6f0; }
+  :root:not([data-theme="light"]) [data-category="astro-ph.GA"] { --c: #6cc893; }
+  :root:not([data-theme="light"]) [data-category="astro-ph.HE"] { --c: #f08e6c; }
+  :root:not([data-theme="light"]) [data-category="astro-ph.IM"] { --c: #b29bf0; }
+  :root:not([data-theme="light"]) [data-category="astro-ph.SR"] { --c: #e6be5a; }
+  :root:not([data-theme="light"]) [data-category="astro-ph.EP"] { --c: #66c3d0; }
 }
+
+/* explicit dark theme */
+  :root[data-theme="dark"] [data-category="astro-ph.CO"] { --c: #7fa6f0; }
+  :root[data-theme="dark"] [data-category="astro-ph.GA"] { --c: #6cc893; }
+  :root[data-theme="dark"] [data-category="astro-ph.HE"] { --c: #f08e6c; }
+  :root[data-theme="dark"] [data-category="astro-ph.IM"] { --c: #b29bf0; }
+  :root[data-theme="dark"] [data-category="astro-ph.SR"] { --c: #e6be5a; }
+  :root[data-theme="dark"] [data-category="astro-ph.EP"] { --c: #66c3d0; }
+
 
 /* ===== Topic panel ===== */
 .topic-list { display: grid; gap: 16px; }
@@ -1128,3 +1174,23 @@ details[open] > .action-btn svg { color: var(--accent); }
   .figure-stage { grid-column: 1 / -1; grid-row: 1; }
   .carousel-button { justify-self: center; }
 }
+
+/* ===== Theme toggle ===== */
+.header-actions { display: flex; align-items: center; gap: 8px; }
+
+.theme-toggle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.theme-toggle .icon-sun { display: none; }
+:root[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+:root[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-toggle .icon-sun { display: block; }
+  :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
+}
+
+.admin-toolbar-actions { display: flex; align-items: center; gap: 8px; }
