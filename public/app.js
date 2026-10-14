@@ -806,8 +806,24 @@ function sameSuggestion(entry, paper) {
     && (entry?.suggestedBy?.username || "").toLowerCase() === (paper.suggestedBy?.username || "").toLowerCase();
 }
 
+function confirmAction(detail) {
+  const modal = document.querySelector("#confirmModal");
+  document.querySelector("#confirmModalPaper").textContent = detail || "";
+  modal.returnValue = "";
+
+  return new Promise((resolve) => {
+    modal.addEventListener("close", () => resolve(modal.returnValue === "confirm"), { once: true });
+    modal.showModal();
+    modal.querySelector('button[value="cancel"]').focus();
+  });
+}
+
 async function dismissSuggestion(paper, button) {
   if (!state.sessionUser) {
+    return;
+  }
+
+  if (!(await confirmAction(paper.title))) {
     return;
   }
 

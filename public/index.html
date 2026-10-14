@@ -228,6 +228,23 @@
       </div>
     </dialog>
 
+    <dialog id="confirmModal" class="confirm-modal" aria-labelledby="confirmModalTitle">
+      <form method="dialog" class="confirm-modal-shell">
+        <div class="confirm-icon" aria-hidden="true">
+          <svg viewBox="0 0 20 20" width="22" height="22"><path d="M3.5 5.5h13M8 5.5V4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M5.2 5.5l.7 10.1a1.5 1.5 0 0 0 1.5 1.4h5.2a1.5 1.5 0 0 0 1.5-1.4l.7-10.1M8.5 8.5v5.5M11.5 8.5v5.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="confirm-text">
+          <h2 id="confirmModalTitle">Remove suggestion?</h2>
+          <p>Are you sure you want to unsuggest this paper? This cannot be undone.</p>
+          <p id="confirmModalPaper" class="confirm-paper"></p>
+        </div>
+        <div class="confirm-actions">
+          <button value="cancel" class="btn" type="submit">Cancel</button>
+          <button value="confirm" class="btn btn-danger" type="submit">Remove</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="bibtexModal" class="bibtex-modal">
       <div class="bibtex-modal-shell">
         <div class="bibtex-modal-header">
