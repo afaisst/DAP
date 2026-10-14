@@ -772,12 +772,39 @@ button:disabled { opacity: 0.5; }
   padding: 1px 7px;
 }
 
+.paper-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: -6px -8px 0 0;
+}
+
+.dismiss-suggestion-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-left: 4px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  color: var(--danger);
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+.dismiss-suggestion-button:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.dismiss-suggestion-button:active { transform: scale(0.92); }
+
 .favorite-button {
   display: grid;
   place-items: center;
   width: 36px;
   height: 36px;
-  margin: -6px -8px 0 0;
   border: 0;
   border-radius: 50%;
   background: transparent;

@@ -587,6 +587,7 @@ function renderPaper(paper) {
   const adsBibtexLink = node.querySelector(".ads-bibtex-link");
   const bibtexButton = node.querySelector(".bibtex-button");
   const favoriteButton = node.querySelector(".favorite-button");
+  const dismissSuggestionButton = node.querySelector(".dismiss-suggestion-button");
   const figuresButton = node.querySelector(".figures-button");
   const summaryButton = node.querySelector(".summary-button");
 
@@ -597,6 +598,11 @@ function renderPaper(paper) {
   node.classList.toggle("paper-card--author-match", paperMatchesProfile(paper));
   updateFavoriteButton(favoriteButton, paper);
   favoriteButton.addEventListener("click", () => toggleFavorite(paper));
+
+  if (paper.suggestedBy) {
+    dismissSuggestionButton.hidden = false;
+    dismissSuggestionButton.addEventListener("click", () => dismissSuggestion(paper, dismissSuggestionButton));
+  }
   copyButton.addEventListener("click", () => copyPaperLink(copyButton, paper.url, shareMenu));
   suggestButton.addEventListener("click", () => openSuggestModal(paper, shareMenu));
   setShareLinks(paper, { emailShareLink, xShareLink, facebookShareLink, linkedinShareLink });
@@ -793,6 +799,45 @@ function mergeFavorites(primaryFavorites, secondaryFavorites) {
 
 function getFavoritePapers() {
   return [...state.favorites].sort((a, b) => new Date(b.favoritedAt || b.published) - new Date(a.favoritedAt || a.published));
+}
+
+function sameSuggestion(entry, paper) {
+  return entry?.id === paper.id
+    && (entry?.suggestedBy?.username || "").toLowerCase() === (paper.suggestedBy?.username || "").toLowerCase();
+}
+
+async function dismissSuggestion(paper, button) {
+  if (!state.sessionUser) {
+    return;
+  }
+
+  const previous = state.suggestions;
+  button.disabled = true;
+  // Only the suggestion entry is removed; favorites live in state.favorites and are not touched.
+  state.suggestions = state.suggestions.filter((entry) => !sameSuggestion(entry, paper));
+  render();
+
+  try {
+    const response = await fetch("/api/suggestions", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: paper.id, suggestedBy: paper.suggestedBy?.username || "" })
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.error || "Could not remove the suggestion.");
+    }
+
+    if (Array.isArray(data.suggestions)) {
+      state.suggestions = data.suggestions;
+      render();
+    }
+  } catch (error) {
+    state.suggestions = previous;
+    render();
+    setStatus(error.message);
+  }
 }
 
 function getSuggestedPapers() {

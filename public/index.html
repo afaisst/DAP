@@ -115,7 +115,12 @@
               <p class="paper-meta"></p>
             </div>
           </div>
-          <button class="favorite-button" type="button" aria-pressed="false" aria-label="Add to favorites" title="Add to favorites">☆</button>
+          <div class="paper-header-actions">
+            <button class="favorite-button" type="button" aria-pressed="false" aria-label="Add to favorites" title="Add to favorites">☆</button>
+            <button class="dismiss-suggestion-button" type="button" aria-label="Remove from suggested papers" title="Remove from suggested papers (favorites are kept)" hidden>
+              <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M3.5 5.5h13M8 5.5V4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M5.2 5.5l.7 10.1a1.5 1.5 0 0 0 1.5 1.4h5.2a1.5 1.5 0 0 0 1.5-1.4l.7-10.1M8.5 8.5v5.5M11.5 8.5v5.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
         </div>
 
         <div class="authors"></div>

@@ -652,7 +652,7 @@ async function handleSuggestions(req, res) {
     });
   }
 
-  if (req.method !== "POST") {
+  if (req.method !== "POST" && req.method !== "DELETE") {
     return json(res, 405, { error: "Method not allowed." });
   }
 
@@ -662,6 +662,28 @@ async function handleSuggestions(req, res) {
     payload = await readJsonBody(req);
   } catch {
     return json(res, 400, { error: "Invalid JSON body." });
+  }
+
+  if (req.method === "DELETE") {
+    // Dismiss a suggestion from the current user's own list. Favorites are stored separately and stay untouched.
+    const paperId = typeof payload.id === "string" ? payload.id.trim() : "";
+    const suggesterKey = normalizeUsername(typeof payload.suggestedBy === "string" ? payload.suggestedBy : "");
+
+    if (!paperId) {
+      return json(res, 400, { error: "Missing paper id." });
+    }
+
+    const existing = Array.isArray(auth.user.suggestions) ? auth.user.suggestions : [];
+    auth.user.suggestions = existing.filter((entry) => !(
+      entry?.id === paperId
+      && (!suggesterKey || normalizeUsername(entry?.suggestedBy?.username || "") === suggesterKey)
+    ));
+
+    if (auth.user.suggestions.length !== existing.length) {
+      await writeUserStore(auth.store);
+    }
+
+    return json(res, 200, { ok: true, suggestions: auth.user.suggestions });
   }
 
   const recipientUsername = typeof payload.recipientUsername === "string" ? payload.recipientUsername.trim() : "";
