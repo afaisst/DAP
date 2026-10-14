@@ -1,3 +1,7 @@
 node_modules/
 .DS_Store
 npm-debug.log*
+
+# Screenshots and files produced by Claude
+Claude outputs/
+Claude Output/
