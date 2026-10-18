@@ -746,7 +746,9 @@ function sanitizeLikedPaper(payload) {
     .filter((entry) => entry.term && entry.weight > 0 && !seen.has(entry.term) && seen.add(entry.term))
     .slice(0, maxKeywordsPerPaper);
 
-  return { id, title, url, keywords, likedAt: new Date().toISOString() };
+  // vote 1 = thumbs up, -1 = thumbs down ("show me fewer papers like this").
+  const vote = Number(payload.vote) === -1 ? -1 : 1;
+  return { id, title, url, keywords, vote, likedAt: new Date().toISOString() };
 }
 
 // Thumbs-up "likes": each entry keeps the paper's extracted keywords, which drive the "Most Interesting" list.

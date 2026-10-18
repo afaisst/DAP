@@ -3,7 +3,8 @@
 // 1. When a paper is liked, extractKeywords() picks its most distinctive terms
 //    (single words and two-word phrases) using TF-IDF against the day's papers,
 //    so generic words like "galaxy" or "observations" are down-weighted.
-// 2. buildInterestProfile() adds up the keyword weights of all liked papers.
+// 2. buildInterestProfile() adds up the keyword weights of all liked papers; thumbs-down papers
+//    subtract their keywords at 70% strength, so similar papers rank lower.
 // 3. scoreInterest() rates any paper by how strongly it contains those keywords
 //    (title matches count double).
 
@@ -127,12 +128,20 @@ export function extractKeywords(paper, corpus, limit = 12) {
   return candidates.map((entry) => ({ term: entry.term, weight: Math.round((entry.score / top) * 100) / 100 }));
 }
 
-export function buildInterestProfile(likedPapers) {
+export const dislikeStrength = 0.7;
+
+export function isDownVote(entry) {
+  return Number(entry?.vote) === -1;
+}
+
+export function buildInterestProfile(votedPapers) {
   const profile = new Map();
 
-  likedPapers.forEach((liked) => {
-    (liked.keywords || []).forEach(({ term, weight }) => {
-      profile.set(term, (profile.get(term) || 0) + (Number(weight) || 0));
+  votedPapers.forEach((voted) => {
+    const sign = isDownVote(voted) ? -dislikeStrength : 1;
+
+    (voted.keywords || []).forEach(({ term, weight }) => {
+      profile.set(term, (profile.get(term) || 0) + sign * (Number(weight) || 0));
     });
   });
 
@@ -150,22 +159,34 @@ export function scoreInterest(paper, profile) {
   all.forEach((_count, term) => {
     const weight = profile.get(term);
 
-    if (weight) {
+    if (weight > 0) {
       contributions.push({ term, value: weight * (title.has(term) ? 2 : 1) });
+    }
+  });
+
+  let penalty = 0;
+
+  all.forEach((_count, term) => {
+    const weight = profile.get(term);
+
+    if (weight < 0) {
+      penalty += weight * (title.has(term) ? 2 : 1);
     }
   });
 
   contributions.sort((a, b) => b.value - a.value);
   return {
-    score: contributions.reduce((sum, entry) => sum + entry.value, 0),
+    score: contributions.reduce((sum, entry) => sum + entry.value, 0) + penalty,
     matches: contributions.map((entry) => entry.term)
   };
 }
 
 // Picks the day's most interesting papers: score at least 1 and at least 25% of the best match among papers
 // not yet liked (a liked paper matches its own keywords perfectly and would otherwise set the bar too high).
-export function mostInterestingPapers(papers, profile, likedIds = new Set(), limit = 12) {
+// Papers in `hiddenIds` (thumbs-down) are never listed.
+export function mostInterestingPapers(papers, profile, likedIds = new Set(), limit = 12, hiddenIds = new Set()) {
   const scored = papers
+    .filter((paper) => !hiddenIds.has(paper.id))
     .map((paper) => ({ paper, ...scoreInterest(paper, profile) }))
     .filter((entry) => entry.score >= 1)
     .sort((a, b) => b.score - a.score);
@@ -177,8 +198,10 @@ export function mostInterestingPapers(papers, profile, likedIds = new Set(), lim
     .map((entry) => ({ ...entry.paper, interestScore: entry.score, interestMatches: entry.matches.slice(0, 4) }));
 }
 
-export function aggregateKeywords(likedPapers) {
-  return [...buildInterestProfile(likedPapers).entries()]
-    .map(([term, weight]) => ({ term, weight }))
+// Net keyword weights (likes minus thumbs-downs); positive = interested, negative = less interested.
+export function aggregateKeywords(votedPapers) {
+  return [...buildInterestProfile(votedPapers).entries()]
+    .map(([term, weight]) => ({ term, weight: Math.round(weight * 100) / 100 }))
+    .filter((entry) => entry.weight !== 0)
     .sort((a, b) => b.weight - a.weight);
 }

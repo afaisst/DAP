@@ -1348,3 +1348,34 @@ details[open] > .action-btn svg { color: var(--accent); }
 .liked-papers summary { cursor: pointer; color: var(--accent); font-size: 0.88rem; font-weight: 650; }
 .liked-papers ul { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 0.88rem; }
 .liked-papers a { color: var(--ink-2); }
+
+/* ===== Thumbs-down ===== */
+.dislike-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-right: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--muted);
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+.dislike-button:hover { background: var(--surface-3); color: var(--ink); }
+.dislike-button:active { transform: scale(0.92); }
+
+.dislike-button[aria-pressed="true"] {
+  --like-fill: rgba(255, 255, 255, 0.25);
+  background: var(--ink-2);
+  border-color: var(--ink-2);
+  color: var(--surface);
+}
+
+.keyword-chip--negative {
+  background: color-mix(in srgb, var(--danger) calc(6% + var(--strength, 0) * 20%), var(--surface));
+}
+
+.profile-subheading { margin: 4px 0 0; color: var(--muted); font-size: 0.82rem; font-weight: 650; }
+.vote-tag { color: var(--muted); font-size: 0.78rem; margin-left: 6px; }

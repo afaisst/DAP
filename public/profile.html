@@ -75,8 +75,10 @@
           <h2>What you like</h2>
           <p id="interestsSummary" class="profile-help">Give papers a thumbs up on the main page and Daily AstroPH learns which keywords you care about. They drive the "Most Interesting" list.</p>
           <div id="keywordCloud" class="keyword-cloud"></div>
+          <p id="negativeHeading" class="profile-subheading" hidden>Less interested in</p>
+          <div id="negativeCloud" class="keyword-cloud"></div>
           <details id="likedPapers" class="liked-papers" hidden>
-            <summary>Liked papers</summary>
+            <summary>Rated papers</summary>
             <ul id="likedPapersList"></ul>
           </details>
           <div class="profile-actions">
@@ -101,7 +103,7 @@
         </div>
         <div class="confirm-text">
           <h2 id="confirmModalTitle">Forget everything?</h2>
-          <p>This removes all learned keywords and thumbs-ups, and the "Most Interesting" list starts from scratch. This cannot be undone.</p>
+          <p>This removes all learned keywords, thumbs-ups and thumbs-downs, and the "Most Interesting" list starts from scratch. This cannot be undone.</p>
         </div>
         <div class="confirm-actions">
           <button value="cancel" class="btn" type="submit">Cancel</button>

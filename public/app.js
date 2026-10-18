@@ -1,4 +1,4 @@
-import { buildInterestProfile, extractKeywords, mostInterestingPapers } from "/interests.js";
+import { buildInterestProfile, extractKeywords, isDownVote, mostInterestingPapers } from "/interests.js";
 
 const topics = [
     {
@@ -475,7 +475,13 @@ function render() {
     });
   }
 
-  const interestingPapers = state.liked.length ? mostInterestingPapers(filtered, buildInterestProfile(state.liked), new Set(state.liked.map((entry) => entry.id))) : [];
+  const interestingPapers = state.liked.length ? mostInterestingPapers(
+        filtered,
+        buildInterestProfile(state.liked),
+        new Set(state.liked.filter((entry) => !isDownVote(entry)).map((entry) => entry.id)),
+        12,
+        new Set(state.liked.filter(isDownVote).map((entry) => entry.id))
+      ) : [];
 
   if (interestingPapers.length) {
     grouped.unshift({
@@ -613,6 +619,7 @@ function renderPaper(paper) {
   const favoriteButton = node.querySelector(".favorite-button");
   const dismissSuggestionButton = node.querySelector(".dismiss-suggestion-button");
   const likeButton = node.querySelector(".like-button");
+  const dislikeButton = node.querySelector(".dislike-button");
   const figuresButton = node.querySelector(".figures-button");
   const summaryButton = node.querySelector(".summary-button");
 
@@ -623,8 +630,9 @@ function renderPaper(paper) {
   node.classList.toggle("paper-card--author-match", paperMatchesProfile(paper));
   updateFavoriteButton(favoriteButton, paper);
   favoriteButton.addEventListener("click", () => toggleFavorite(paper));
-  updateLikeButton(likeButton, paper);
-  likeButton.addEventListener("click", () => toggleLike(paper, likeButton));
+  updateVoteButtons(likeButton, dislikeButton, paper);
+  likeButton.addEventListener("click", () => setVote(paper, voteOf(paper) === 1 ? 0 : 1));
+  dislikeButton.addEventListener("click", () => setVote(paper, voteOf(paper) === -1 ? 0 : -1));
 
   if (paper.suggestedBy) {
     dismissSuggestionButton.hidden = false;
@@ -843,19 +851,24 @@ async function loadLikes() {
   }
 }
 
-function isLiked(paper) {
+// 1 = thumbs up, -1 = thumbs down, 0 = no vote.
+function voteOf(paper) {
   const key = favoriteKey(paper);
-  return state.liked.some((entry) => entry.id === key);
+  const entry = state.liked.find((item) => item.id === key);
+  return entry ? (isDownVote(entry) ? -1 : 1) : 0;
 }
 
-function updateLikeButton(button, paper) {
-  const active = isLiked(paper);
-  button.setAttribute("aria-pressed", String(active));
-  button.title = active ? "Liked — click to stop learning from this paper" : "I like this — learn from this paper";
-  button.setAttribute("aria-label", active ? "Remove like" : "Like this paper");
+function updateVoteButtons(likeButton, dislikeButton, paper) {
+  const vote = voteOf(paper);
+  likeButton.setAttribute("aria-pressed", String(vote === 1));
+  likeButton.title = vote === 1 ? "Liked — click to stop learning from this paper" : "I like this — show me more papers like it";
+  likeButton.setAttribute("aria-label", vote === 1 ? "Remove like" : "Like this paper");
+  dislikeButton.setAttribute("aria-pressed", String(vote === -1));
+  dislikeButton.title = vote === -1 ? "Marked not interesting — click to undo" : "Not interesting — show me fewer papers like this";
+  dislikeButton.setAttribute("aria-label", vote === -1 ? "Undo not interesting" : "Not interesting");
 }
 
-async function toggleLike(paper, button) {
+async function setVote(paper, vote) {
   if (!state.sessionUser) {
     accountMenu.open = true;
     authStatus.textContent = "Log in to teach Daily AstroPH which papers you like.";
@@ -865,21 +878,22 @@ async function toggleLike(paper, button) {
 
   const key = favoriteKey(paper);
   const previous = state.liked;
-  const wasLiked = isLiked(paper);
+  const others = state.liked.filter((entry) => entry.id !== key);
   let request;
 
-  button.disabled = true;
-
-  if (wasLiked) {
-    state.liked = state.liked.filter((entry) => entry.id !== key);
+  if (vote === 0) {
+    state.liked = others;
     request = { method: "DELETE", body: { id: key } };
   } else {
     const corpus = state.papers.some((entry) => favoriteKey(entry) === key) ? state.papers : [paper, ...state.papers];
-    const keywords = extractKeywords(paper, corpus);
-    const entry = { id: key, title: paper.title, url: paper.url, keywords, likedAt: new Date().toISOString() };
-    state.liked = [entry, ...state.liked];
-    request = { method: "POST", body: { paper: { id: key, title: paper.title, url: paper.url }, keywords } };
-    showToast(`Learning from this paper: ${keywords.slice(0, 5).map((keyword) => keyword.term).join(", ")}${keywords.length > 5 ? "…" : ""}`);
+    const existing = state.liked.find((entry) => entry.id === key);
+    const keywords = existing?.keywords?.length ? existing.keywords : extractKeywords(paper, corpus);
+    state.liked = [{ id: key, title: paper.title, url: paper.url, keywords, vote, likedAt: new Date().toISOString() }, ...others];
+    request = { method: "POST", body: { paper: { id: key, title: paper.title, url: paper.url }, keywords, vote } };
+    const terms = `${keywords.slice(0, 5).map((keyword) => keyword.term).join(", ")}${keywords.length > 5 ? "…" : ""}`;
+    showToast(vote === 1
+      ? `Learning from this paper: ${terms}`
+      : `Got it — hidden from Most Interesting, and fewer papers about: ${terms}`);
   }
 
   render();
@@ -893,7 +907,7 @@ async function toggleLike(paper, button) {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      throw new Error(data.error || "Could not save your like.");
+      throw new Error(data.error || "Could not save your vote.");
     }
 
     if (Array.isArray(data.liked)) {

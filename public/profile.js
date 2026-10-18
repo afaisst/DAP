@@ -1,4 +1,4 @@
-import { aggregateKeywords } from "/interests.js";
+import { aggregateKeywords, isDownVote } from "/interests.js";
 
 const profileStatus = document.querySelector("#profileStatus");
 const fullNameInput = document.querySelector("#fullNameInput");
@@ -17,6 +17,8 @@ const keywordCloud = document.querySelector("#keywordCloud");
 const likedPapers = document.querySelector("#likedPapers");
 const likedPapersList = document.querySelector("#likedPapersList");
 const forgetLikesButton = document.querySelector("#forgetLikesButton");
+const negativeHeading = document.querySelector("#negativeHeading");
+const negativeCloud = document.querySelector("#negativeCloud");
 
 let sessionUser = null;
 let passwordsVisible = false;
@@ -260,31 +262,42 @@ async function loadLikes() {
   }
 }
 
+function renderKeywordChips(container, keywords, negative) {
+  const strongest = Math.max(...keywords.map((entry) => Math.abs(entry.weight)), 1e-9);
+  container.innerHTML = "";
+
+  keywords.forEach(({ term, weight }) => {
+    const chip = document.createElement("span");
+    chip.className = `keyword-chip${negative ? " keyword-chip--negative" : ""}`;
+    chip.style.setProperty("--strength", (Math.abs(weight) / strongest).toFixed(2));
+    chip.textContent = term;
+    const score = document.createElement("small");
+    score.textContent = weight.toFixed(1);
+    chip.appendChild(score);
+    container.appendChild(chip);
+  });
+}
+
 function renderLikes(liked) {
-  const keywords = aggregateKeywords(liked).slice(0, 60);
-  const strongest = keywords[0]?.weight || 1;
-  keywordCloud.innerHTML = "";
+  const keywords = aggregateKeywords(liked);
+  const positive = keywords.filter((entry) => entry.weight > 0).slice(0, 60);
+  const negative = keywords.filter((entry) => entry.weight < 0).reverse().slice(0, 30);
+  const upCount = liked.filter((entry) => !isDownVote(entry)).length;
+  const downCount = liked.length - upCount;
+
+  renderKeywordChips(keywordCloud, positive, false);
+  renderKeywordChips(negativeCloud, negative, true);
+  negativeHeading.hidden = !negative.length;
   likedPapersList.innerHTML = "";
   likedPapers.hidden = !liked.length;
   forgetLikesButton.disabled = !liked.length;
 
   if (!liked.length) {
-    interestsSummary.textContent = "Nothing learned yet. Give papers a thumbs up on the main page and Daily AstroPH learns which keywords you care about. They drive the \"Most Interesting\" list.";
+    interestsSummary.textContent = "Nothing learned yet. Give papers a thumbs up (or thumbs down) on the main page and Daily AstroPH learns which keywords you care about. They drive the \"Most Interesting\" list.";
     return;
   }
 
-  interestsSummary.textContent = `Learned from ${liked.length} liked ${liked.length === 1 ? "paper" : "papers"}. Stronger keywords are shaded darker and count more when ranking "Most Interesting".`;
-
-  keywords.forEach(({ term, weight }) => {
-    const chip = document.createElement("span");
-    chip.className = "keyword-chip";
-    chip.style.setProperty("--strength", (weight / strongest).toFixed(2));
-    chip.textContent = term;
-    const score = document.createElement("small");
-    score.textContent = weight.toFixed(1);
-    chip.appendChild(score);
-    keywordCloud.appendChild(chip);
-  });
+  interestsSummary.textContent = `Learned from ${upCount} liked and ${downCount} not-interesting ${liked.length === 1 ? "paper" : "papers"}. Stronger keywords are shaded darker and count more when ranking "Most Interesting".`;
 
   liked.forEach((paper) => {
     const item = document.createElement("li");
@@ -293,7 +306,10 @@ function renderLikes(liked) {
     link.target = "_blank";
     link.rel = "noreferrer";
     link.textContent = paper.title || paper.id;
-    item.appendChild(link);
+    const tag = document.createElement("span");
+    tag.className = "vote-tag";
+    tag.textContent = isDownVote(paper) ? "(not interesting)" : "(liked)";
+    item.append(link, tag);
     likedPapersList.appendChild(item);
   });
 }
