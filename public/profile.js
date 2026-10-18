@@ -1,3 +1,5 @@
+import { aggregateKeywords } from "/interests.js";
+
 const profileStatus = document.querySelector("#profileStatus");
 const fullNameInput = document.querySelector("#fullNameInput");
 const orcidInput = document.querySelector("#orcidInput");
@@ -10,6 +12,11 @@ const confirmPasswordInput = document.querySelector("#confirmPasswordInput");
 const togglePasswordButton = document.querySelector("#togglePasswordButton");
 const changePasswordButton = document.querySelector("#changePasswordButton");
 const deleteAccountButton = document.querySelector("#deleteAccountButton");
+const interestsSummary = document.querySelector("#interestsSummary");
+const keywordCloud = document.querySelector("#keywordCloud");
+const likedPapers = document.querySelector("#likedPapers");
+const likedPapersList = document.querySelector("#likedPapersList");
+const forgetLikesButton = document.querySelector("#forgetLikesButton");
 
 let sessionUser = null;
 let passwordsVisible = false;
@@ -19,6 +26,7 @@ addNameAliasButton.addEventListener("click", () => addNameAliasInput("", true));
 togglePasswordButton.addEventListener("click", togglePasswordVisibility);
 changePasswordButton.addEventListener("click", changePassword);
 deleteAccountButton.addEventListener("click", deleteAccount);
+forgetLikesButton.addEventListener("click", forgetLikes);
 
 init();
 
@@ -38,6 +46,7 @@ async function init() {
     orcidInput.value = sessionUser.orcid || "";
     renderNameAliases(sessionUser.nameAliases || []);
     profileStatus.textContent = `Currently signed in as ${sessionUser.username}.`;
+    await loadLikes();
   } catch (error) {
     profileStatus.textContent = `Could not load profile. ${error.message}`;
     setFormDisabled(true);
@@ -234,4 +243,95 @@ function setFormDisabled(disabled) {
   nameAliasesList.querySelectorAll("input, button").forEach((element) => {
     element.disabled = disabled;
   });
+}
+
+async function loadLikes() {
+  try {
+    const response = await fetch("/api/likes");
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Could not load your likes.");
+    }
+
+    renderLikes(Array.isArray(data.liked) ? data.liked : []);
+  } catch (error) {
+    interestsSummary.textContent = error.message;
+  }
+}
+
+function renderLikes(liked) {
+  const keywords = aggregateKeywords(liked).slice(0, 60);
+  const strongest = keywords[0]?.weight || 1;
+  keywordCloud.innerHTML = "";
+  likedPapersList.innerHTML = "";
+  likedPapers.hidden = !liked.length;
+  forgetLikesButton.disabled = !liked.length;
+
+  if (!liked.length) {
+    interestsSummary.textContent = "Nothing learned yet. Give papers a thumbs up on the main page and Daily AstroPH learns which keywords you care about. They drive the \"Most Interesting\" list.";
+    return;
+  }
+
+  interestsSummary.textContent = `Learned from ${liked.length} liked ${liked.length === 1 ? "paper" : "papers"}. Stronger keywords are shaded darker and count more when ranking "Most Interesting".`;
+
+  keywords.forEach(({ term, weight }) => {
+    const chip = document.createElement("span");
+    chip.className = "keyword-chip";
+    chip.style.setProperty("--strength", (weight / strongest).toFixed(2));
+    chip.textContent = term;
+    const score = document.createElement("small");
+    score.textContent = weight.toFixed(1);
+    chip.appendChild(score);
+    keywordCloud.appendChild(chip);
+  });
+
+  liked.forEach((paper) => {
+    const item = document.createElement("li");
+    const link = document.createElement("a");
+    link.href = paper.url || "#";
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    link.textContent = paper.title || paper.id;
+    item.appendChild(link);
+    likedPapersList.appendChild(item);
+  });
+}
+
+function confirmForget() {
+  const modal = document.querySelector("#confirmModal");
+  modal.returnValue = "";
+
+  return new Promise((resolve) => {
+    modal.addEventListener("close", () => resolve(modal.returnValue === "confirm"), { once: true });
+    modal.showModal();
+    modal.querySelector('button[value="cancel"]').focus();
+  });
+}
+
+async function forgetLikes() {
+  if (!(await confirmForget())) {
+    return;
+  }
+
+  forgetLikesButton.disabled = true;
+
+  try {
+    const response = await fetch("/api/likes", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ all: true })
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Could not forget your likes.");
+    }
+
+    renderLikes([]);
+    profileStatus.textContent = "Everything learned has been forgotten.";
+  } catch (error) {
+    profileStatus.textContent = error.message;
+    forgetLikesButton.disabled = false;
+  }
 }

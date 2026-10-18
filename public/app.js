@@ -1,3 +1,5 @@
+import { buildInterestProfile, extractKeywords, mostInterestingPapers } from "/interests.js";
+
 const topics = [
     {
     id: "cosmology",
@@ -83,6 +85,12 @@ const myPapersTopic = {
   terms: []
 };
 
+const interestingTopic = {
+  id: "interesting",
+  label: "Most Interesting",
+  terms: []
+};
+
 const suggestedTopic = {
   id: "suggested",
   label: "Suggested Papers",
@@ -95,6 +103,7 @@ const state = {
   papers: [],
   favorites: [],
   suggestions: [],
+  liked: [],
   selectedDate: formatDateInputValue(new Date()),
   search: "",
   activeCategories: new Set(astroPhCategories.map((category) => category.id)),
@@ -103,7 +112,7 @@ const state = {
   calendarMonth: null
 };
 
-const personalTopicIds = new Set(["favorites", "suggested", "my-papers"]);
+const personalTopicIds = new Set(["interesting", "favorites", "suggested", "my-papers"]);
 
 const calendarEl = document.querySelector("#calendar");
 const topicNav = document.querySelector("#topicNav");
@@ -467,6 +476,15 @@ function render() {
     });
   }
 
+  const interestingPapers = state.liked.length ? mostInterestingPapers(filtered, buildInterestProfile(state.liked), new Set(state.liked.map((entry) => entry.id))) : [];
+
+  if (interestingPapers.length) {
+    grouped.unshift({
+      topic: interestingTopic,
+      papers: interestingPapers
+    });
+  }
+
   setStatus(statusMessage(filtered.length, state.papers.length));
 
   if (!grouped.length) {
@@ -560,6 +578,14 @@ function renderPaperMeta(meta, paper) {
     meta.appendChild(pill);
   });
 
+  if (paper.interestMatches?.length) {
+    const interest = document.createElement("span");
+    interest.className = "meta-interest";
+    interest.textContent = `Matches: ${paper.interestMatches.join(", ")}`;
+    interest.title = "Keywords learned from papers you liked";
+    meta.appendChild(interest);
+  }
+
   if (paper.suggestedBy) {
     const suggested = document.createElement("span");
     suggested.className = "meta-suggested";
@@ -588,6 +614,7 @@ function renderPaper(paper) {
   const bibtexButton = node.querySelector(".bibtex-button");
   const favoriteButton = node.querySelector(".favorite-button");
   const dismissSuggestionButton = node.querySelector(".dismiss-suggestion-button");
+  const likeButton = node.querySelector(".like-button");
   const figuresButton = node.querySelector(".figures-button");
   const summaryButton = node.querySelector(".summary-button");
 
@@ -598,6 +625,8 @@ function renderPaper(paper) {
   node.classList.toggle("paper-card--author-match", paperMatchesProfile(paper));
   updateFavoriteButton(favoriteButton, paper);
   favoriteButton.addEventListener("click", () => toggleFavorite(paper));
+  updateLikeButton(likeButton, paper);
+  likeButton.addEventListener("click", () => toggleLike(paper, likeButton));
 
   if (paper.suggestedBy) {
     dismissSuggestionButton.hidden = false;
@@ -661,14 +690,17 @@ async function loadSession() {
     if (state.sessionUser) {
       await loadRemoteFavorites(true);
       await loadSuggestions();
+      await loadLikes();
     } else {
       state.favorites = loadLocalFavorites();
       state.suggestions = [];
+      state.liked = [];
     }
   } catch {
     state.sessionUser = null;
     state.favorites = loadLocalFavorites();
     state.suggestions = [];
+    state.liked = [];
   }
 
   updateAuthUi();
@@ -704,6 +736,7 @@ async function submitAuth(endpoint) {
     passwordInput.value = "";
     await loadRemoteFavorites(true);
     await loadSuggestions();
+    await loadLikes();
     updateAuthUi();
     render();
   } catch (error) {
@@ -725,6 +758,7 @@ async function logout() {
   state.sessionUser = null;
   state.favorites = loadLocalFavorites();
   state.suggestions = [];
+  state.liked = [];
   passwordInput.value = "";
   updateAuthUi();
   render();
@@ -799,6 +833,94 @@ function mergeFavorites(primaryFavorites, secondaryFavorites) {
 
 function getFavoritePapers() {
   return [...state.favorites].sort((a, b) => new Date(b.favoritedAt || b.published) - new Date(a.favoritedAt || a.published));
+}
+
+async function loadLikes() {
+  try {
+    const response = await fetch("/api/likes");
+    const data = await response.json();
+    state.liked = response.ok && Array.isArray(data.liked) ? data.liked : [];
+  } catch {
+    state.liked = [];
+  }
+}
+
+function isLiked(paper) {
+  const key = favoriteKey(paper);
+  return state.liked.some((entry) => entry.id === key);
+}
+
+function updateLikeButton(button, paper) {
+  const active = isLiked(paper);
+  button.setAttribute("aria-pressed", String(active));
+  button.title = active ? "Liked — click to stop learning from this paper" : "I like this — learn from this paper";
+  button.setAttribute("aria-label", active ? "Remove like" : "Like this paper");
+}
+
+async function toggleLike(paper, button) {
+  if (!state.sessionUser) {
+    accountMenu.open = true;
+    authStatus.textContent = "Log in to teach Daily AstroPH which papers you like.";
+    usernameInput.focus();
+    return;
+  }
+
+  const key = favoriteKey(paper);
+  const previous = state.liked;
+  const wasLiked = isLiked(paper);
+  let request;
+
+  button.disabled = true;
+
+  if (wasLiked) {
+    state.liked = state.liked.filter((entry) => entry.id !== key);
+    request = { method: "DELETE", body: { id: key } };
+  } else {
+    const corpus = state.papers.some((entry) => favoriteKey(entry) === key) ? state.papers : [paper, ...state.papers];
+    const keywords = extractKeywords(paper, corpus);
+    const entry = { id: key, title: paper.title, url: paper.url, keywords, likedAt: new Date().toISOString() };
+    state.liked = [entry, ...state.liked];
+    request = { method: "POST", body: { paper: { id: key, title: paper.title, url: paper.url }, keywords } };
+    showToast(`Learning from this paper: ${keywords.slice(0, 5).map((keyword) => keyword.term).join(", ")}${keywords.length > 5 ? "…" : ""}`);
+  }
+
+  render();
+
+  try {
+    const response = await fetch("/api/likes", {
+      method: request.method,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(request.body)
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.error || "Could not save your like.");
+    }
+
+    if (Array.isArray(data.liked)) {
+      state.liked = data.liked;
+    }
+  } catch (error) {
+    state.liked = previous;
+    showToast(error.message);
+  }
+
+  render();
+}
+
+let toastTimer = null;
+
+function showToast(message) {
+  const toast = document.querySelector("#toast");
+  toast.textContent = message;
+  toast.hidden = false;
+  requestAnimationFrame(() => toast.classList.add("toast--visible"));
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => {
+    toast.classList.remove("toast--visible");
+    window.setTimeout(() => { toast.hidden = true; }, 250);
+  }, 3500);
 }
 
 function sameSuggestion(entry, paper) {

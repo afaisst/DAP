@@ -71,6 +71,19 @@
           </div>
         </article>
 
+        <article class="profile-card profile-card--wide">
+          <h2>What you like</h2>
+          <p id="interestsSummary" class="profile-help">Give papers a thumbs up on the main page and Daily AstroPH learns which keywords you care about. They drive the "Most Interesting" list.</p>
+          <div id="keywordCloud" class="keyword-cloud"></div>
+          <details id="likedPapers" class="liked-papers" hidden>
+            <summary>Liked papers</summary>
+            <ul id="likedPapersList"></ul>
+          </details>
+          <div class="profile-actions">
+            <button id="forgetLikesButton" type="button" class="danger-button" disabled>Forget everything</button>
+          </div>
+        </article>
+
         <article class="profile-card profile-card--danger">
           <h2>Account</h2>
           <p class="profile-help">Delete this account and all saved data from the server.</p>
@@ -80,6 +93,22 @@
         </article>
       </section>
     </main>
+
+    <dialog id="confirmModal" class="confirm-modal" aria-labelledby="confirmModalTitle">
+      <form method="dialog" class="confirm-modal-shell">
+        <div class="confirm-icon" aria-hidden="true">
+          <svg viewBox="0 0 20 20" width="22" height="22"><path d="M3.5 5.5h13M8 5.5V4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M5.2 5.5l.7 10.1a1.5 1.5 0 0 0 1.5 1.4h5.2a1.5 1.5 0 0 0 1.5-1.4l.7-10.1M8.5 8.5v5.5M11.5 8.5v5.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="confirm-text">
+          <h2 id="confirmModalTitle">Forget everything?</h2>
+          <p>This removes all learned keywords and thumbs-ups, and the "Most Interesting" list starts from scratch. This cannot be undone.</p>
+        </div>
+        <div class="confirm-actions">
+          <button value="cancel" class="btn" type="submit">Cancel</button>
+          <button value="confirm" class="btn btn-danger" type="submit">Forget</button>
+        </div>
+      </form>
+    </dialog>
 
     <script src="/profile.js" type="module"></script>
   </body>

@@ -219,12 +219,14 @@ async function ensurePostgresSchema() {
         favorites JSONB NOT NULL DEFAULT '[]'::jsonb,
         name_aliases JSONB NOT NULL DEFAULT '[]'::jsonb,
         suggestions JSONB NOT NULL DEFAULT '[]'::jsonb,
+        liked JSONB NOT NULL DEFAULT '[]'::jsonb,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `).then(() => pool.query(`
       ALTER TABLE dap_users
         ADD COLUMN IF NOT EXISTS name_aliases JSONB NOT NULL DEFAULT '[]'::jsonb,
-        ADD COLUMN IF NOT EXISTS suggestions JSONB NOT NULL DEFAULT '[]'::jsonb
+        ADD COLUMN IF NOT EXISTS suggestions JSONB NOT NULL DEFAULT '[]'::jsonb,
+        ADD COLUMN IF NOT EXISTS liked JSONB NOT NULL DEFAULT '[]'::jsonb
     `)));
   }
 
@@ -243,6 +245,7 @@ function rowToUser(row) {
     favorites: Array.isArray(row.favorites) ? row.favorites : [],
     nameAliases: Array.isArray(row.name_aliases) ? row.name_aliases : [],
     suggestions: Array.isArray(row.suggestions) ? row.suggestions : [],
+    liked: Array.isArray(row.liked) ? row.liked : [],
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
   };
 }
@@ -285,9 +288,10 @@ async function writePostgresUserStore(store) {
             favorites,
             name_aliases,
             suggestions,
+            liked,
             created_at
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, COALESCE($11::timestamptz, NOW()))
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, COALESCE($12::timestamptz, NOW()))
           ON CONFLICT (username_key) DO UPDATE SET
             username = EXCLUDED.username,
             password_salt = EXCLUDED.password_salt,
@@ -297,7 +301,8 @@ async function writePostgresUserStore(store) {
             is_admin = EXCLUDED.is_admin,
             favorites = EXCLUDED.favorites,
             name_aliases = EXCLUDED.name_aliases,
-            suggestions = EXCLUDED.suggestions
+            suggestions = EXCLUDED.suggestions,
+            liked = EXCLUDED.liked
         `, [
           user.username,
           user.usernameKey,
@@ -309,6 +314,7 @@ async function writePostgresUserStore(store) {
           JSON.stringify(Array.isArray(user.favorites) ? user.favorites : []),
           JSON.stringify(Array.isArray(user.nameAliases) ? user.nameAliases : []),
           JSON.stringify(Array.isArray(user.suggestions) ? user.suggestions : []),
+          JSON.stringify(Array.isArray(user.liked) ? user.liked : []),
           user.createdAt || null
         ]);
       }
@@ -507,6 +513,7 @@ async function handleSignup(req, res) {
     favorites: [],
     nameAliases: [],
     suggestions: [],
+    liked: [],
     createdAt: new Date().toISOString()
   });
   await writeUserStore(store);
@@ -716,6 +723,80 @@ async function handleSuggestions(req, res) {
   ].slice(0, 500);
   await writeUserStore(auth.store);
   return json(res, 200, { ok: true });
+}
+
+const maxLikedPapers = 1000;
+const maxKeywordsPerPaper = 25;
+
+function sanitizeLikedPaper(payload) {
+  const id = typeof payload?.paper?.id === "string" ? payload.paper.id.trim().slice(0, 300) : "";
+  const title = typeof payload?.paper?.title === "string" ? payload.paper.title.trim().slice(0, 500) : "";
+  const url = typeof payload?.paper?.url === "string" ? payload.paper.url.trim().slice(0, 500) : "";
+
+  if (!id) {
+    return null;
+  }
+
+  const seen = new Set();
+  const keywords = (Array.isArray(payload.keywords) ? payload.keywords : [])
+    .map((entry) => ({
+      term: typeof entry?.term === "string" ? entry.term.toLowerCase().replace(/\s+/g, " ").trim().slice(0, 60) : "",
+      weight: Math.min(1, Math.max(0, Number(entry?.weight) || 0))
+    }))
+    .filter((entry) => entry.term && entry.weight > 0 && !seen.has(entry.term) && seen.add(entry.term))
+    .slice(0, maxKeywordsPerPaper);
+
+  return { id, title, url, keywords, likedAt: new Date().toISOString() };
+}
+
+// Thumbs-up "likes": each entry keeps the paper's extracted keywords, which drive the "Most Interesting" list.
+async function handleLikes(req, res) {
+  const auth = await getUserFromSession(req, res);
+
+  if (!auth) {
+    return;
+  }
+
+  const current = () => (Array.isArray(auth.user.liked) ? auth.user.liked : []);
+
+  if (req.method === "GET") {
+    return json(res, 200, { liked: current() });
+  }
+
+  if (req.method !== "POST" && req.method !== "DELETE") {
+    return json(res, 405, { error: "Method not allowed." });
+  }
+
+  let payload;
+
+  try {
+    payload = await readJsonBody(req);
+  } catch {
+    return json(res, 400, { error: "Invalid JSON body." });
+  }
+
+  if (req.method === "POST") {
+    const liked = sanitizeLikedPaper(payload);
+
+    if (!liked) {
+      return json(res, 400, { error: "Could not read that paper." });
+    }
+
+    auth.user.liked = [liked, ...current().filter((entry) => entry?.id !== liked.id)].slice(0, maxLikedPapers);
+  } else if (payload.all === true) {
+    auth.user.liked = [];
+  } else {
+    const id = typeof payload.id === "string" ? payload.id.trim() : "";
+
+    if (!id) {
+      return json(res, 400, { error: "Missing paper id." });
+    }
+
+    auth.user.liked = current().filter((entry) => entry?.id !== id);
+  }
+
+  await writeUserStore(auth.store);
+  return json(res, 200, { liked: auth.user.liked });
 }
 
 async function handlePassword(req, res) {
@@ -1072,6 +1153,10 @@ async function handleAuth(req, res) {
     return handleSuggestions(req, res);
   }
 
+  if (url.pathname === "/api/likes") {
+    return handleLikes(req, res);
+  }
+
   if (url.pathname === "/api/password") {
     return handlePassword(req, res);
   }
@@ -1130,6 +1215,7 @@ const server = http.createServer((req, res) => {
     || req.url?.startsWith("/api/profile")
     || req.url?.startsWith("/api/users")
     || req.url?.startsWith("/api/suggestions")
+    || req.url?.startsWith("/api/likes")
     || req.url?.startsWith("/api/password")
     || req.url?.startsWith("/api/account")
     || req.url?.startsWith("/api/admin/users")) {

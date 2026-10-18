@@ -32,6 +32,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    --like: #6b9bff;
     --bg: #0d1016;
     --surface: #151922;
     --surface-2: #1b202a;
@@ -60,6 +61,7 @@
 
 /* explicit dark theme */
   :root[data-theme="dark"] {
+    --like: #6b9bff;
     --bg: #0d1016;
     --surface: #151922;
     --surface-2: #1b202a;
@@ -536,6 +538,7 @@ button:disabled { opacity: 0.5; }
 .topic-nav-loading span { height: 26px; border-radius: 6px; background: var(--surface-3); animation: pulse 1.4s ease-in-out infinite; }
 
 /* Topic colors */
+[data-topic="interesting"] { --topic-color: #2563eb; }
 [data-topic="favorites"] { --topic-color: #d99a1e; }
 [data-topic="suggested"] { --topic-color: #a0672f; }
 [data-topic="my-papers"] { --topic-color: #3d4452; }
@@ -1267,3 +1270,81 @@ details[open] > .action-btn svg { color: var(--accent); }
 
 .btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
 .btn-danger:hover { background: var(--danger-strong); border-color: var(--danger-strong); }
+
+/* ===== Thumbs-up / learning ===== */
+:root { --like: #2563eb; }
+
+.like-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-right: 2px;
+  border: 1px solid color-mix(in srgb, var(--like) 35%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--like) 10%, var(--surface));
+  color: var(--like);
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+.like-button:hover { background: color-mix(in srgb, var(--like) 20%, var(--surface)); }
+.like-button:active { transform: scale(0.92); }
+
+.like-button[aria-pressed="true"] {
+  --like-fill: rgba(255, 255, 255, 0.25);
+  background: var(--like);
+  border-color: var(--like);
+  color: #fff;
+}
+
+.like-button[aria-pressed="true"]:hover { background: color-mix(in srgb, var(--like) 85%, #000); }
+.like-button:disabled { opacity: 0.6; }
+
+.meta-interest {
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--like) 12%, transparent);
+  color: var(--like);
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 1px 7px;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 100;
+  max-width: min(560px, calc(100vw - 32px));
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--bg);
+  box-shadow: var(--shadow-lg);
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 10px 16px;
+  opacity: 0;
+  transform: translate(-50%, 8px);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+.toast--visible { opacity: 1; transform: translate(-50%, 0); }
+
+/* ===== Profile: learned interests ===== */
+.profile-card--wide { grid-column: 1 / -1; }
+
+.keyword-cloud { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.keyword-chip {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--like) calc(6% + var(--strength, 0) * 22%), var(--surface));
+  color: var(--ink);
+  font-size: 0.84rem;
+  font-weight: 550;
+  padding: 3px 11px;
+}
+
+.keyword-chip small { color: var(--muted); font-weight: 600; margin-left: 4px; }
+
+.liked-papers summary { cursor: pointer; color: var(--accent); font-size: 0.88rem; font-weight: 650; }
+.liked-papers ul { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 0.88rem; }
+.liked-papers a { color: var(--ink-2); }
