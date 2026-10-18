@@ -1,3 +1,4 @@
+import { ArxivBusyError, arxivStatus, cachedArxiv } from "./arxiv-client.js";
 import http from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
@@ -980,24 +981,9 @@ function decodeHtmlEntities(value) {
     .replace(/&#39;/g, "'");
 }
 
-// arXiv asks clients to slow down with HTTP 429 (Too Many Requests) and sometimes 503 when busy.
-// Wait as long as arXiv says (Retry-After header) or back off 3s, then 6s, before giving up.
-const arxivRetryStatuses = new Set([429, 503]);
-
-async function fetchArxiv(url, userAgent, maxRetries = 2) {
-  for (let attempt = 0; ; attempt += 1) {
-    const response = await fetch(url, { headers: { "user-agent": userAgent } });
-
-    if (!arxivRetryStatuses.has(response.status) || attempt >= maxRetries) {
-      return response;
-    }
-
-    const retryAfter = Number(response.headers.get("retry-after"));
-    const waitSeconds = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter, 15) : 3 * (attempt + 1);
-    console.warn(`arXiv returned HTTP ${response.status} for ${url}; retrying in ${waitSeconds}s`);
-    await response.body?.cancel().catch(() => {});
-    await new Promise((resolve) => setTimeout(resolve, waitSeconds * 1000));
-  }
+function busyMessage(error) {
+  const minutes = Math.ceil(error.retryAfterSeconds / 60);
+  return `arXiv is limiting requests right now (too many requests). Please try again in ${minutes <= 1 ? "about a minute" : `about ${minutes} minutes`}.`;
 }
 
 async function handleFigures(req, res) {
@@ -1011,18 +997,29 @@ async function handleFigures(req, res) {
   const htmlUrl = `https://arxiv.org/html/${id}`;
 
   try {
-    const response = await fetchArxiv(htmlUrl, "DailyAstroPH/1.0 (local webpage; figure preview)");
+    const { value: figures, source } = await cachedArxiv(`figures:${id}`, 24 * 60 * 60 * 1000, async (fetchArxiv) => {
+      const response = await fetchArxiv(htmlUrl, "DailyAstroPH/1.0 (arxiv daily reader; figure preview)");
 
-    if (!response.ok) {
-      throw new Error(`arXiv HTML returned HTTP ${response.status}`);
-    }
+      if (response.status === 404) {
+        return [];
+      }
 
-    const html = await response.text();
-    const figures = parseFigureHtml(html, htmlUrl);
+      if (!response.ok) {
+        throw new Error(`arXiv HTML returned HTTP ${response.status}`);
+      }
+
+      return parseFigureHtml(await response.text(), htmlUrl);
+    });
+
     json(res, 200, { id, source: htmlUrl, figures }, {
-      "cache-control": "public, max-age=900"
+      "cache-control": "public, max-age=3600",
+      "x-arxiv-cache": source
     });
   } catch (error) {
+    if (error instanceof ArxivBusyError) {
+      return json(res, 503, { error: "arXiv is busy.", detail: busyMessage(error) }, { "retry-after": String(error.retryAfterSeconds) });
+    }
+
     json(res, 502, {
       error: "Could not load figures for this paper.",
       detail: error.message
@@ -1055,27 +1052,33 @@ async function handleApi(req, res) {
     sortOrder: "descending"
   });
 
+  // Days older than 3 days no longer change, so keep them for a week; recent days refresh every 30 minutes.
+  const ageDays = (Date.now() - Date.parse(`${selectedDate}T00:00:00Z`)) / 86400000;
+  const isSettled = ageDays > 3;
+  const ttlMs = isSettled ? 7 * 24 * 60 * 60 * 1000 : 30 * 60 * 1000;
+
   try {
-    const response = await fetchArxiv(`https://export.arxiv.org/api/query?${params}`, "DailyAstroPH/1.0 (local webpage; arxiv daily reader)");
+    const { value: xml, source } = await cachedArxiv(`papers:${selectedDate}:${maxResults}`, ttlMs, async (fetchArxiv) => {
+      const response = await fetchArxiv(`https://export.arxiv.org/api/query?${params}`, "DailyAstroPH/1.0 (arxiv daily reader)");
 
-    if (response.status === 429) {
-      return json(res, 503, {
-        error: "arXiv is busy.",
-        detail: "arXiv is receiving too many requests right now (HTTP 429). Please wait a minute and press Refresh."
-      });
-    }
+      if (!response.ok) {
+        throw new Error(`arXiv returned HTTP ${response.status}`);
+      }
 
-    if (!response.ok) {
-      throw new Error(`arXiv returned HTTP ${response.status}`);
-    }
+      return response.text();
+    });
 
-    const xml = await response.text();
     res.writeHead(200, {
       "content-type": "application/atom+xml; charset=utf-8",
-      "cache-control": "public, max-age=900"
+      "cache-control": `public, max-age=${isSettled ? 86400 : 900}`,
+      "x-arxiv-cache": source
     });
     res.end(xml);
   } catch (error) {
+    if (error instanceof ArxivBusyError) {
+      return json(res, 503, { error: "arXiv is busy.", detail: busyMessage(error) }, { "retry-after": String(error.retryAfterSeconds) });
+    }
+
     json(res, 502, {
       error: "Could not fetch papers from arXiv.",
       detail: error.message
@@ -1168,6 +1171,10 @@ const server = http.createServer((req, res) => {
     return handleFigures(req, res);
   }
 
+
+  if (req.url?.startsWith("/api/arxiv-status")) {
+    return json(res, 200, arxivStatus());
+  }
 
   if (req.url?.startsWith("/api/session")
     || req.url?.startsWith("/api/signup")
