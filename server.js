@@ -13,7 +13,6 @@ const host = process.env.HOST || "0.0.0.0";
 const sessionCookieName = "dap_session";
 const sessionMaxAgeSeconds = 60 * 60 * 24 * 30;
 const sessionSecret = process.env.SESSION_SECRET || "daily-astroph-local-dev-secret";
-const authorMetadataCache = new Map();
 let userStoreWrite = Promise.resolve();
 let postgresPoolPromise;
 let postgresSchemaPromise;
@@ -949,14 +948,6 @@ function parseFigureHtml(html, baseUrl) {
     .slice(0, 30);
 }
 
-function parsePaperAuthorMetadata(html) {
-  const orcids = [...html.matchAll(/https?:\/\/orcid\.org\/([0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9X]{4})/gi)]
-    .map((match) => match[1].toUpperCase())
-    .filter((orcid, index, values) => values.indexOf(orcid) === index);
-
-  return { orcids };
-}
-
 function cleanHtml(value) {
   return preserveMathText(value)
     .replace(/<[^>]+>/g, " ")
@@ -989,6 +980,26 @@ function decodeHtmlEntities(value) {
     .replace(/&#39;/g, "'");
 }
 
+// arXiv asks clients to slow down with HTTP 429 (Too Many Requests) and sometimes 503 when busy.
+// Wait as long as arXiv says (Retry-After header) or back off 3s, then 6s, before giving up.
+const arxivRetryStatuses = new Set([429, 503]);
+
+async function fetchArxiv(url, userAgent, maxRetries = 2) {
+  for (let attempt = 0; ; attempt += 1) {
+    const response = await fetch(url, { headers: { "user-agent": userAgent } });
+
+    if (!arxivRetryStatuses.has(response.status) || attempt >= maxRetries) {
+      return response;
+    }
+
+    const retryAfter = Number(response.headers.get("retry-after"));
+    const waitSeconds = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(retryAfter, 15) : 3 * (attempt + 1);
+    console.warn(`arXiv returned HTTP ${response.status} for ${url}; retrying in ${waitSeconds}s`);
+    await response.body?.cancel().catch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, waitSeconds * 1000));
+  }
+}
+
 async function handleFigures(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const id = url.searchParams.get("id")?.trim();
@@ -1000,11 +1011,7 @@ async function handleFigures(req, res) {
   const htmlUrl = `https://arxiv.org/html/${id}`;
 
   try {
-    const response = await fetch(htmlUrl, {
-      headers: {
-        "user-agent": "DailyAstroPH/1.0 (local webpage; figure preview)"
-      }
-    });
+    const response = await fetchArxiv(htmlUrl, "DailyAstroPH/1.0 (local webpage; figure preview)");
 
     if (!response.ok) {
       throw new Error(`arXiv HTML returned HTTP ${response.status}`);
@@ -1018,51 +1025,6 @@ async function handleFigures(req, res) {
   } catch (error) {
     json(res, 502, {
       error: "Could not load figures for this paper.",
-      detail: error.message
-    });
-  }
-}
-
-async function handlePaperAuthors(req, res) {
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  const id = url.searchParams.get("id")?.trim();
-
-  if (!id || !/^\d{4}\.\d{4,5}(v\d+)?$/.test(id)) {
-    return json(res, 400, { error: "Missing or invalid arXiv ID." });
-  }
-
-  if (authorMetadataCache.has(id)) {
-    return json(res, 200, authorMetadataCache.get(id), {
-      "cache-control": "public, max-age=900"
-    });
-  }
-
-  const absUrl = `https://arxiv.org/abs/${id}`;
-
-  try {
-    const response = await fetch(absUrl, {
-      headers: {
-        "user-agent": "DailyAstroPH/1.0 (local webpage; author metadata)"
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`arXiv abstract page returned HTTP ${response.status}`);
-    }
-
-    const html = await response.text();
-    const metadata = {
-      id,
-      source: absUrl,
-      ...parsePaperAuthorMetadata(html)
-    };
-    authorMetadataCache.set(id, metadata);
-    return json(res, 200, metadata, {
-      "cache-control": "public, max-age=900"
-    });
-  } catch (error) {
-    return json(res, 502, {
-      error: "Could not load author metadata for this paper.",
       detail: error.message
     });
   }
@@ -1094,11 +1056,14 @@ async function handleApi(req, res) {
   });
 
   try {
-    const response = await fetch(`https://export.arxiv.org/api/query?${params}`, {
-      headers: {
-        "user-agent": "DailyAstroPH/1.0 (local webpage; arxiv daily reader)"
-      }
-    });
+    const response = await fetchArxiv(`https://export.arxiv.org/api/query?${params}`, "DailyAstroPH/1.0 (local webpage; arxiv daily reader)");
+
+    if (response.status === 429) {
+      return json(res, 503, {
+        error: "arXiv is busy.",
+        detail: "arXiv is receiving too many requests right now (HTTP 429). Please wait a minute and press Refresh."
+      });
+    }
 
     if (!response.ok) {
       throw new Error(`arXiv returned HTTP ${response.status}`);
@@ -1203,9 +1168,6 @@ const server = http.createServer((req, res) => {
     return handleFigures(req, res);
   }
 
-  if (req.url?.startsWith("/api/paper-authors")) {
-    return handlePaperAuthors(req, res);
-  }
 
   if (req.url?.startsWith("/api/session")
     || req.url?.startsWith("/api/signup")

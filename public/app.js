@@ -160,7 +160,6 @@ const signupButton = document.querySelector("#signupButton");
 const profileLink = document.querySelector("#profileLink");
 const adminLink = document.querySelector("#adminLink");
 const logoutButton = document.querySelector("#logoutButton");
-const authorMetadataLookups = new Map();
 
 const figureState = {
   figures: [],
@@ -517,7 +516,6 @@ function render() {
   activeGroup.papers.forEach((paper) => grid.appendChild(renderPaper(paper)));
   topicList.appendChild(panel);
   typesetMath(topicList);
-  void enrichVisiblePaperAuthors(activeGroup.papers);
 }
 
 function renderTopicNav(grouped) {
@@ -988,49 +986,6 @@ function getSuggestedPapers() {
     .sort((a, b) => new Date(b.suggestedAt || b.published) - new Date(a.suggestedAt || a.published));
 }
 
-async function enrichVisiblePaperAuthors(papers) {
-  const profileOrcid = normalizeOrcid(state.sessionUser?.orcid || "");
-
-  if (!profileOrcid) {
-    return;
-  }
-
-  const targets = papers.filter((paper) => !paper.authorMetadataLoaded && !authorMetadataLookups.has(paper.id));
-
-  if (!targets.length) {
-    return;
-  }
-
-  const requests = targets.map(async (paper) => {
-    const request = fetch(`/api/paper-authors?id=${encodeURIComponent(arxivIdFromUrl(paper.url))}`)
-      .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
-      .then(({ ok, data }) => {
-        if (ok) {
-          paper.authorOrcids = Array.isArray(data.orcids) ? data.orcids : [];
-        }
-
-        paper.authorMetadataLoaded = true;
-        return ok;
-      })
-      .catch(() => {
-        paper.authorMetadataLoaded = true;
-        return false;
-      })
-      .finally(() => {
-        authorMetadataLookups.delete(paper.id);
-      });
-
-    authorMetadataLookups.set(paper.id, request);
-    return request;
-  });
-
-  const results = await Promise.all(requests);
-
-  if (results.some(Boolean)) {
-    render();
-  }
-}
-
 function favoriteKey(paper) {
   return paper.id || paper.url;
 }
@@ -1152,22 +1107,11 @@ function setAuthButtonsDisabled(disabled) {
   signupButton.disabled = disabled;
 }
 
+// "My Papers" matching uses the profile's full name and name aliases against the author list.
+// (arXiv's listing has no ORCIDs, and fetching every paper page to find them caused HTTP 429 errors.)
 function paperMatchesProfile(paper) {
   if (!state.sessionUser) {
     return false;
-  }
-
-  const profileOrcid = normalizeOrcid(state.sessionUser.orcid || "");
-  const paperOrcids = (paper.authorOrcids || []).map(normalizeOrcid);
-
-  if (profileOrcid) {
-    if (paperOrcids.includes(profileOrcid)) {
-      return true;
-    }
-
-    if (paper.authorMetadataLoaded && paperOrcids.length > 0) {
-      return false;
-    }
   }
 
   const profileNames = [state.sessionUser.fullName, ...(state.sessionUser.nameAliases || [])]
