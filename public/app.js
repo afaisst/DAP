@@ -109,8 +109,11 @@ const state = {
   activeCategories: new Set(astroPhCategories.map((category) => category.id)),
   activeTopicId: null,
   sessionUser: null,
-  calendarMonth: null
+  calendarMonth: null,
+  showAllInteresting: false
 };
+
+const interestingInitialCount = 12;
 
 const personalTopicIds = new Set(["interesting", "favorites", "suggested", "my-papers"]);
 
@@ -255,6 +258,7 @@ async function init() {
 }
 
 async function loadPapers() {
+  state.showAllInteresting = false;
   topicList.innerHTML = loadingSkeleton();
   topicNav.innerHTML = `<div class="topic-nav-loading"><span></span><span></span><span></span><span></span><span></span></div>`;
   setStatus(`Loading astro-ph papers for ${formatDate(state.selectedDate)}...`);
@@ -479,7 +483,7 @@ function render() {
         filtered,
         buildInterestProfile(state.liked),
         new Set(state.liked.filter((entry) => !isDownVote(entry)).map((entry) => entry.id)),
-        12,
+        Infinity,
         new Set(state.liked.filter(isDownVote).map((entry) => entry.id))
       ) : [];
 
@@ -519,7 +523,25 @@ function render() {
   `;
 
   const grid = panel.querySelector(".papers-grid");
-  activeGroup.papers.forEach((paper) => grid.appendChild(renderPaper(paper)));
+  // "Most Interesting" shows the top papers first; the rest that passed the score checks sit behind "Show more".
+  const isInteresting = activeGroup.topic.id === interestingTopic.id;
+  const visiblePapers = isInteresting && !state.showAllInteresting
+    ? activeGroup.papers.slice(0, interestingInitialCount)
+    : activeGroup.papers;
+  visiblePapers.forEach((paper) => grid.appendChild(renderPaper(paper)));
+
+  if (visiblePapers.length < activeGroup.papers.length) {
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "btn show-more-button";
+    const remaining = activeGroup.papers.length - visiblePapers.length;
+    more.textContent = `Show ${remaining} more ${remaining === 1 ? "paper" : "papers"}`;
+    more.addEventListener("click", () => {
+      state.showAllInteresting = true;
+      render();
+    });
+    panel.appendChild(more);
+  }
   topicList.appendChild(panel);
   typesetMath(topicList);
 }

@@ -1379,3 +1379,5 @@ details[open] > .action-btn svg { color: var(--accent); }
 
 .profile-subheading { margin: 4px 0 0; color: var(--muted); font-size: 0.82rem; font-weight: 650; }
 .vote-tag { color: var(--muted); font-size: 0.78rem; margin-left: 6px; }
+
+.show-more-button { justify-self: center; min-width: 220px; margin-top: 4px; }
