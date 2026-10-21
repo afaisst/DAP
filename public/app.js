@@ -689,63 +689,17 @@ function setLibraryLinks(paper, links) {
   links.papersLibraryLink.href = paper.url;
   links.adsBibtexLink.href = adsExportCitationUrl(paper);
   links.bentyVoteLink.href = bentyFieldsUrl(paper);
-  links.bentyVoteLink.addEventListener("click", () => {
-    // Fallback if the paper isn't on that day's Benty Fields list: its Benty-search finds papers by arXiv ID.
-    void copyText(paperBaseArxivId(paper));
-    showToast(`Opened on Benty Fields. arXiv ID ${paperBaseArxivId(paper)} copied, in case you need Benty-search.`);
-  });
 }
 
+// arXiv ID without version ("2610.20722v2" -> "2610.20722"); also handles old-style IDs like "astro-ph/0601001".
 function paperBaseArxivId(paper) {
-  return arxivIdFromUrl(paper.url).replace(/v\d+$/, "");
+  const match = (paper.url || paper.id || "").match(/abs\/(.+?)(v\d+)?$/);
+  return match ? match[1] : arxivIdFromUrl(paper.url).replace(/v\d+$/, "");
 }
 
-// Benty Fields lists papers by arXiv announcement date, with an anchor per paper ("#paper2610.26375v1").
+// Opens the paper's own Benty Fields page, which has the Vote button (Benty Fields doesn't accept version suffixes).
 function bentyFieldsUrl(paper) {
-  const id = paperBaseArxivId(paper);
-  const date = arxivListingDate(paper.published);
-  return date
-    ? `https://www.benty-fields.com/daily_arXiv_results?date=${date}#paper${id}v1`
-    : "https://www.benty-fields.com/benty-search";
-}
-
-// arXiv's daily cutoff is 14:00 US Eastern on weekdays. Papers submitted before a weekday's cutoff are
-// announced that evening and appear in the listing dated the next weekday. Holidays and papers held by
-// arXiv moderators can shift this, which is why the arXiv ID is also copied as a fallback.
-function arxivListingDate(isoTimestamp) {
-  const submitted = new Date(isoTimestamp);
-
-  if (Number.isNaN(submitted.getTime())) {
-    return "";
-  }
-
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    hourCycle: "h23"
-  }).formatToParts(submitted).map((part) => [part.type, part.value]));
-  const day = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)));
-  const isWeekend = (date) => date.getUTCDay() === 0 || date.getUTCDay() === 6;
-  const nextDay = (date) => date.setUTCDate(date.getUTCDate() + 1);
-
-  if (!isWeekend(day) && Number(parts.hour) >= 14) {
-    nextDay(day);
-  }
-
-  while (isWeekend(day)) {
-    nextDay(day);
-  }
-
-  nextDay(day);
-
-  while (isWeekend(day)) {
-    nextDay(day);
-  }
-
-  return day.toISOString().slice(0, 10);
+  return `https://www.benty-fields.com/daily_arXiv_results?paper_id=${encodeURIComponent(paperBaseArxivId(paper))}&dbname=arxiv`;
 }
 
 function loadLocalFavorites() {
