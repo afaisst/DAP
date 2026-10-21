@@ -637,6 +637,7 @@ function renderPaper(paper) {
   const zoteroLibraryLink = node.querySelector(".zotero-library-link");
   const papersLibraryLink = node.querySelector(".papers-library-link");
   const adsBibtexLink = node.querySelector(".ads-bibtex-link");
+  const bentyVoteLink = node.querySelector(".benty-vote-link");
   const bibtexButton = node.querySelector(".bibtex-button");
   const favoriteButton = node.querySelector(".favorite-button");
   const dismissSuggestionButton = node.querySelector(".dismiss-suggestion-button");
@@ -663,7 +664,7 @@ function renderPaper(paper) {
   copyButton.addEventListener("click", () => copyPaperLink(copyButton, paper.url, shareMenu));
   suggestButton.addEventListener("click", () => openSuggestModal(paper, shareMenu));
   setShareLinks(paper, { emailShareLink, xShareLink, facebookShareLink, linkedinShareLink });
-  setLibraryLinks(paper, { zoteroLibraryLink, papersLibraryLink, adsBibtexLink });
+  setLibraryLinks(paper, { zoteroLibraryLink, papersLibraryLink, adsBibtexLink, bentyVoteLink });
   bibtexButton.addEventListener("click", () => openBibtexModal(paper, libraryMenu));
   figuresButton.addEventListener("click", () => openFigureModal(paper));
   summaryButton.addEventListener("click", () => openSummaryModal(paper));
@@ -687,6 +688,64 @@ function setLibraryLinks(paper, links) {
   links.zoteroLibraryLink.href = `https://www.zotero.org/save?q=${encodeURIComponent(paper.url)}`;
   links.papersLibraryLink.href = paper.url;
   links.adsBibtexLink.href = adsExportCitationUrl(paper);
+  links.bentyVoteLink.href = bentyFieldsUrl(paper);
+  links.bentyVoteLink.addEventListener("click", () => {
+    // Fallback if the paper isn't on that day's Benty Fields list: its Benty-search finds papers by arXiv ID.
+    void copyText(paperBaseArxivId(paper));
+    showToast(`Opened on Benty Fields. arXiv ID ${paperBaseArxivId(paper)} copied, in case you need Benty-search.`);
+  });
+}
+
+function paperBaseArxivId(paper) {
+  return arxivIdFromUrl(paper.url).replace(/v\d+$/, "");
+}
+
+// Benty Fields lists papers by arXiv announcement date, with an anchor per paper ("#paper2610.26375v1").
+function bentyFieldsUrl(paper) {
+  const id = paperBaseArxivId(paper);
+  const date = arxivListingDate(paper.published);
+  return date
+    ? `https://www.benty-fields.com/daily_arXiv_results?date=${date}#paper${id}v1`
+    : "https://www.benty-fields.com/benty-search";
+}
+
+// arXiv's daily cutoff is 14:00 US Eastern on weekdays. Papers submitted before a weekday's cutoff are
+// announced that evening and appear in the listing dated the next weekday. Holidays and papers held by
+// arXiv moderators can shift this, which is why the arXiv ID is also copied as a fallback.
+function arxivListingDate(isoTimestamp) {
+  const submitted = new Date(isoTimestamp);
+
+  if (Number.isNaN(submitted.getTime())) {
+    return "";
+  }
+
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(submitted).map((part) => [part.type, part.value]));
+  const day = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)));
+  const isWeekend = (date) => date.getUTCDay() === 0 || date.getUTCDay() === 6;
+  const nextDay = (date) => date.setUTCDate(date.getUTCDate() + 1);
+
+  if (!isWeekend(day) && Number(parts.hour) >= 14) {
+    nextDay(day);
+  }
+
+  while (isWeekend(day)) {
+    nextDay(day);
+  }
+
+  nextDay(day);
+
+  while (isWeekend(day)) {
+    nextDay(day);
+  }
+
+  return day.toISOString().slice(0, 10);
 }
 
 function loadLocalFavorites() {

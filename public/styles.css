@@ -1381,3 +1381,5 @@ details[open] > .action-btn svg { color: var(--accent); }
 .vote-tag { color: var(--muted); font-size: 0.78rem; margin-left: 6px; }
 
 .show-more-button { justify-self: center; min-width: 220px; margin-top: 4px; }
+
+a.action-btn { text-decoration: none; }
