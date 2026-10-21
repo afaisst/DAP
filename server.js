@@ -1029,6 +1029,101 @@ async function handleFigures(req, res) {
   }
 }
 
+// Full-arXiv search. arXiv's API can't filter by author position, so the server fetches the papers
+// matching the author surnames/dates/IDs and the browser then applies "first author" / "position > N".
+const maxSearchResults = 300;
+
+function authorSurnameTerm(name) {
+  const clean = String(name || "").trim().slice(0, 100);
+  const surname = (clean.includes(",") ? clean.split(",")[0] : clean.split(/\s+/).pop() || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z' -]/g, "")
+    .trim()
+    .replace(/\s+/g, "_");
+  return surname ? `au:${surname}` : "";
+}
+
+function compactDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value || "") ? value.replaceAll("-", "") : "";
+}
+
+async function handleSearch(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const q = url.searchParams;
+  const terms = [];
+
+  [q.get("first_author"), q.get("author")].forEach((name) => {
+    const term = authorSurnameTerm(name);
+
+    if (term && !terms.includes(term)) {
+      terms.push(term);
+    }
+  });
+
+  const from = compactDate(q.get("from"));
+  const to = compactDate(q.get("to"));
+
+  if (from || to) {
+    terms.push(`submittedDate:[${from || "19910101"}0000 TO ${to || "29991231"}2359]`);
+  }
+
+  if (q.get("astroph") === "1") {
+    terms.push("cat:astro-ph*");
+  }
+
+  const ids = (q.get("ids") || "")
+    .split(/[\s,]+/)
+    .map((id) => id.trim().replace(/^arxiv:/i, "").replace(/v\d+$/, ""))
+    .filter((id) => /^(\d{4}\.\d{4,5}|[a-z-]+(\.[A-Z]{2})?\/\d{7})$/i.test(id))
+    .slice(0, 50);
+
+  if (!ids.length && !terms.some((term) => !term.startsWith("cat:"))) {
+    return json(res, 400, { error: "Enter at least an author, a date range or an arXiv number." });
+  }
+
+  const params = new URLSearchParams({
+    start: "0",
+    max_results: String(ids.length && !terms.length ? ids.length : maxSearchResults),
+    sortBy: "submittedDate",
+    sortOrder: "descending"
+  });
+
+  if (terms.length) {
+    params.set("search_query", terms.join(" AND "));
+  }
+
+  if (ids.length) {
+    params.set("id_list", ids.join(","));
+  }
+
+  try {
+    const { value: xml, source } = await cachedArxiv(`search:${params}`, 60 * 60 * 1000, async (fetchArxiv) => {
+      const response = await fetchArxiv(`https://export.arxiv.org/api/query?${params}`, "DailyAstroPH/1.0 (arxiv daily reader; search)");
+
+      if (!response.ok) {
+        throw new Error(`arXiv returned HTTP ${response.status}`);
+      }
+
+      return response.text();
+    });
+
+    res.writeHead(200, {
+      "content-type": "application/atom+xml; charset=utf-8",
+      "cache-control": "private, max-age=600",
+      "x-arxiv-cache": source,
+      "x-search-limit": String(maxSearchResults)
+    });
+    res.end(xml);
+  } catch (error) {
+    if (error instanceof ArxivBusyError) {
+      return json(res, 503, { error: "arXiv is busy.", detail: busyMessage(error) }, { "retry-after": String(error.retryAfterSeconds) });
+    }
+
+    json(res, 502, { error: "Could not search arXiv.", detail: error.message });
+  }
+}
+
 async function handleApi(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const selectedDate = url.searchParams.get("date");
@@ -1173,6 +1268,10 @@ const server = http.createServer((req, res) => {
     return handleFigures(req, res);
   }
 
+
+  if (req.url?.startsWith("/api/search")) {
+    return handleSearch(req, res);
+  }
 
   if (req.url?.startsWith("/api/arxiv-status")) {
     return json(res, 200, arxivStatus());

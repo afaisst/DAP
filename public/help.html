@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Daily AstroPH Help</title>
+    <meta name="color-scheme" content="light dark">
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/theme.js"></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="app-header-inner">
+        <a class="brand" href="/" aria-label="Daily AstroPH home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" width="30" height="30"><circle cx="16" cy="16" r="5.5" fill="currentColor"/><ellipse cx="16" cy="16" rx="13" ry="5.2" fill="none" stroke="currentColor" stroke-width="1.8" transform="rotate(-24 16 16)"/><circle cx="27" cy="10.6" r="1.8" fill="currentColor"/></svg>
+          </span>
+          <span class="brand-text">
+            <span class="brand-name">Daily AstroPH</span>
+            <span class="brand-sub">Help &amp; documentation</span>
+          </span>
+        </a>
+        <div class="header-actions">
+          <button class="icon-btn theme-toggle" type="button" title="Toggle dark mode" aria-label="Toggle dark mode">
+            <svg class="icon-moon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M16.5 12.2A6.8 6.8 0 0 1 7.8 3.5a6.8 6.8 0 1 0 8.7 8.7z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+            <svg class="icon-sun" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="3.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M10 2.5v1.8M10 15.7v1.8M2.5 10h1.8M15.7 10h1.8M4.7 4.7l1.3 1.3M14 14l1.3 1.3M4.7 15.3L6 14M14 6l1.3-1.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </button>
+          <a class="admin-back-link" href="/">Back to papers</a>
+        </div>
+      </div>
+    </header>
+
+    <div class="app-layout doc-layout">
+      <aside class="sidebar doc-toc" aria-label="Contents">
+        <nav class="card doc-toc-card">
+          <div class="topic-nav-title">Contents</div>
+          <a href="#daily">Browsing daily papers</a>
+          <a href="#topics">Topics &amp; classifications</a>
+          <a href="#cards">Paper cards</a>
+          <a href="#account">Account &amp; login</a>
+          <a href="#favorites">Favorites</a>
+          <a href="#my-papers">My Papers &amp; author names</a>
+          <a href="#suggest">Suggesting papers</a>
+          <a href="#learning">Thumbs up / down &amp; Most Interesting</a>
+          <a href="#search">Searching all of arXiv</a>
+          <a href="#benty">Voting on Benty Fields</a>
+          <a href="#profile">Profile page</a>
+          <a href="#appearance">Dark mode &amp; shortcuts</a>
+          <a href="#limits">Good to know</a>
+        </nav>
+      </aside>
+
+      <main class="main-column doc-content">
+        <section class="doc-intro">
+          <p class="day-kicker">Documentation</p>
+          <h1>How to use Daily AstroPH</h1>
+          <p>Daily AstroPH shows each day's new arXiv <strong>astro-ph</strong> submissions, sorted into science topics, and helps you keep track of the papers that matter to you: favorites, your own papers, papers colleagues suggest, and a personal "Most Interesting" list that learns from your thumbs-up votes.</p>
+        </section>
+
+        <section id="daily" class="card doc-section">
+          <h2>Browsing daily papers</h2>
+          <ul>
+            <li><strong>Calendar (left).</strong> Click a day to load the astro-ph papers <em>submitted</em> on that day. Use ‹ › to change month, « » to change year, and <em>Prev day</em>, <em>Today</em>, <em>Next day</em> to step through days. Future days are disabled; weekends are greyed out because few papers are submitted then.</li>
+            <li><strong>Heading.</strong> The large date shows the selected day, with the number of papers found. The ⟳ button reloads the list.</li>
+            <li><strong>Search box.</strong> Filters the loaded papers by title, author or abstract as you type. It also narrows lists in "Your library" and search results.</li>
+          </ul>
+        </section>
+
+        <section id="topics" class="card doc-section">
+          <h2>Topics &amp; classifications</h2>
+          <ul>
+            <li><strong>Science topics (left).</strong> Each paper is placed in one topic (Cosmology, Galaxies, Quiescent, Feedback, Black holes, Stars, …) based on keywords in its title and abstract. The number shows how many papers are in each topic; click a topic to show its papers.</li>
+            <li><strong>Your library (left).</strong> Personal lists appear above the topics when they have papers: <em>Most Interesting</em>, <em>Favorites</em>, <em>Suggested Papers</em> and <em>My Papers</em>.</li>
+            <li><strong>Classifications.</strong> The colored chips (CO, GA, HE, IM, SR, EP) switch arXiv categories on and off. A crossed-out chip is off. A paper is shown if <em>any</em> of its categories is switched on (cross-listed papers count).</li>
+          </ul>
+        </section>
+
+        <section id="cards" class="card doc-section">
+          <h2>Paper cards</h2>
+          <p>Every paper is shown as a card:</p>
+          <ul>
+            <li><strong>Title</strong> links to the arXiv abstract page. Below it: submission date, arXiv categories (the main one outlined), and tags such as <em>Suggested by …</em> or <em>Matches: …</em>.</li>
+            <li><strong>Authors:</strong> the first three are shown; click <em>+N</em> for the full list.</li>
+            <li><strong>Abstract:</strong> click to expand.</li>
+            <li><strong>Figures:</strong> shows the paper's figures in a carousel (only for papers with an arXiv HTML version).</li>
+            <li><strong>Summary:</strong> a few key sentences picked automatically from the abstract.</li>
+            <li><strong>Share:</strong> copy the link, share by email, X, Facebook or LinkedIn, or <em>Suggest to a colleague</em> (see below).</li>
+            <li><strong>Library:</strong> add to Zotero, open for Papers/ReadCube, get the ADS BibTeX, or show a ready-made BibTeX entry to copy.</li>
+            <li><strong>Vote on Benty:</strong> opens the paper on Benty Fields to vote for your journal club (see below).</li>
+            <li><strong>Top-right buttons:</strong> 👍 thumbs up, 👎 thumbs down, ★ favorite, and on suggested papers a red 🗑 to remove the suggestion.</li>
+          </ul>
+        </section>
+
+        <section id="account" class="card doc-section">
+          <h2>Account &amp; login</h2>
+          <ul>
+            <li>Use the <strong>Log in</strong> button (top right) to sign in or create an account with a username and password.</li>
+            <li>Without an account you can browse, search and keep favorites, but favorites then live only in this browser.</li>
+            <li>When logged in, favorites, likes and suggestions are saved with your account and follow you to any device. Favorites you collected before logging in are merged into your account.</li>
+            <li>The account menu also links to your <strong>User profile</strong> and lets you <strong>Log out</strong>.</li>
+          </ul>
+        </section>
+
+        <section id="favorites" class="card doc-section">
+          <h2>Favorites</h2>
+          <ul>
+            <li>Click the <strong>☆ star</strong> on any card to save it; it turns into a gold ★. Click again to remove it.</li>
+            <li>All saved papers appear under <strong>Favorites</strong> in "Your library", whatever day you are looking at.</li>
+            <li>Favorites are independent of everything else: removing a suggestion or giving a thumbs down never removes a favorite.</li>
+          </ul>
+        </section>
+
+        <section id="my-papers" class="card doc-section">
+          <h2>My Papers &amp; author names</h2>
+          <ul>
+            <li>On the <a href="/profile.html">profile page</a>, enter your <strong>Full name</strong> under <em>Author details</em>.</li>
+            <li>Under <em>My Paper Settings</em>, use <strong>+ Add name</strong> to add the other ways your name appears on papers (for example "V. C. Rubin" or a maiden name).</li>
+            <li>Papers of the selected day with an author matching one of these names (same surname and first initial) are collected in <strong>My Papers</strong> and highlighted with a gold border.</li>
+            <li>Matching uses names only. The ORCID field is stored on your profile but not used for matching, because arXiv's daily listing does not include ORCIDs.</li>
+          </ul>
+        </section>
+
+        <section id="suggest" class="card doc-section">
+          <h2>Suggesting papers</h2>
+          <ul>
+            <li>Open <strong>Share → Suggest to a colleague</strong>, type part of a colleague's name or username, pick them and press <em>Suggest</em> (you need to be logged in).</li>
+            <li>The paper then appears in their <strong>Suggested Papers</strong> list, tagged with who suggested it.</li>
+            <li>To remove a suggestion from your list, click the red <strong>trash bin</strong> on its card and confirm. This cannot be undone, but if you also starred the paper it stays in your Favorites.</li>
+          </ul>
+        </section>
+
+        <section id="learning" class="card doc-section">
+          <h2>Thumbs up / down &amp; Most Interesting</h2>
+          <ul>
+            <li><strong>👍 Thumbs up</strong> (blue): tells Daily AstroPH you like this kind of paper. It extracts about a dozen distinctive keywords and phrases from the title and abstract (e.g. "rapid quenching", "jwst") and remembers them. A short message at the bottom shows what was learned.</li>
+            <li><strong>👎 Thumbs down</strong> (grey): "not interesting". The paper is hidden from Most Interesting, and its keywords count <em>against</em> similar papers.</li>
+            <li>Clicking an active thumb again removes the vote; up and down switch between each other. You need to be logged in.</li>
+            <li><strong>Most Interesting</strong> (Your library) lists the selected day's papers that best match your liked keywords, best first. Title matches count double. The blue <em>Matches: …</em> tag on each card shows why it was picked. The first 12 are shown; <em>Show more</em> reveals the rest. It respects the Classifications chips and the search box.</li>
+            <li>Your learned keywords are listed on the <a href="/profile.html">profile page</a> under <em>What you like</em> (and <em>Less interested in</em>), together with all rated papers. <strong>Forget everything</strong> deletes them and starts over.</li>
+          </ul>
+        </section>
+
+        <section id="search" class="card doc-section">
+          <h2>Searching all of arXiv</h2>
+          <p>Click the <strong>magnifier</strong> (top right) to search the whole arXiv, not only today's papers. Fill in any combination of fields; all filled fields must match:</p>
+          <ul>
+            <li><strong>First author:</strong> e.g. "Rubin, V", "V. Rubin" or just "Rubin".</li>
+            <li><strong>Author at position later than N:</strong> finds papers where that person is an author after position N. "Later than 3" means 4th author or later; leave the number empty for any position.</li>
+            <li><strong>Submitted from / until:</strong> limit to a date range (either end can be left empty).</li>
+            <li><strong>arXiv number(s):</strong> one or more IDs separated by commas, e.g. "2610.20722, 2501.01234". Versions (v2) are ignored.</li>
+            <li><strong>Only astro-ph papers:</strong> restricts the search to astro-ph.</li>
+          </ul>
+          <p>Results appear under <strong>arXiv search</strong> at the top of the left column, with <em>Edit search</em> and <em>Clear search</em> buttons. Each search checks up to the 300 most recent arXiv matches; for common surnames, add a date range to reach older papers.</p>
+        </section>
+
+        <section id="benty" class="card doc-section">
+          <h2>Voting on Benty Fields</h2>
+          <ul>
+            <li><strong>Vote on Benty</strong> opens the paper's page on <a href="https://www.benty-fields.com" target="_blank" rel="noreferrer">Benty Fields</a>, where you can vote for it in your journal club.</li>
+            <li>You need to be logged in to Benty Fields in the same browser. The vote itself happens on Benty Fields; Daily AstroPH cannot vote for you.</li>
+          </ul>
+        </section>
+
+        <section id="profile" class="card doc-section">
+          <h2>Profile page</h2>
+          <p>Open it from the account menu (top right → <em>User profile</em>). There you can:</p>
+          <ul>
+            <li>set your full name and ORCID, and the name variants used for <em>My Papers</em>;</li>
+            <li>see and reset what the app learned from your thumbs up/down (<em>What you like</em>);</li>
+            <li>change your password;</li>
+            <li>delete your account and all its saved data.</li>
+          </ul>
+        </section>
+
+        <section id="appearance" class="card doc-section">
+          <h2>Dark mode &amp; shortcuts</h2>
+          <ul>
+            <li>The <strong>moon / sun</strong> button switches between light and dark mode. By default the page follows your computer's setting; your choice is remembered in this browser.</li>
+            <li>Keyboard: <kbd>←</kbd> / <kbd>→</kbd> previous / next day, <kbd>/</kbd> jump to the search box.</li>
+          </ul>
+        </section>
+
+        <section id="limits" class="card doc-section">
+          <h2>Good to know</h2>
+          <ul>
+            <li><strong>Dates are submission dates.</strong> arXiv announces papers the next weekday evening, so a paper submitted on Monday appears in arXiv's Tuesday listing.</li>
+            <li><strong>arXiv limits requests.</strong> If arXiv is busy you may see "arXiv is limiting requests right now"; wait a few minutes and press ⟳. Days that were loaded recently are kept by the server and show up instantly.</li>
+            <li><strong>Topics are automatic.</strong> Topic assignment and summaries are keyword-based guesses, not editorial choices.</li>
+          </ul>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

@@ -101,7 +101,7 @@ function addNameAliasInput(value, shouldFocus = true) {
   const row = document.createElement("div");
   row.className = "name-alias-row";
   row.innerHTML = `
-    <input type="text" value="" placeholder="Andreas Faisst">
+    <input type="text" value="" placeholder="Vera C. Rubin">
     <button type="button" aria-label="Remove name variant">-</button>
   `;
 

@@ -85,6 +85,12 @@ const myPapersTopic = {
   terms: []
 };
 
+const searchTopic = {
+  id: "search",
+  label: "Search results",
+  terms: []
+};
+
 const interestingTopic = {
   id: "interesting",
   label: "Most Interesting",
@@ -110,7 +116,8 @@ const state = {
   activeTopicId: null,
   sessionUser: null,
   calendarMonth: null,
-  showAllInteresting: false
+  showAllInteresting: false,
+  searchView: null
 };
 
 const interestingInitialCount = 12;
@@ -479,6 +486,13 @@ function render() {
     });
   }
 
+  if (state.searchView) {
+    grouped.unshift({
+      topic: searchTopic,
+      papers: state.searchView.papers.filter(matchesSearch)
+    });
+  }
+
   const interestingPapers = state.liked.length ? mostInterestingPapers(
         filtered,
         buildInterestProfile(state.liked),
@@ -522,6 +536,22 @@ function render() {
     <div class="papers-grid"></div>
   `;
 
+  if (activeGroup.topic.id === searchTopic.id) {
+    const info = document.createElement("div");
+    info.className = "search-summary";
+    info.innerHTML = `
+      <span>${escapeHtml(state.searchView.summary)}</span>
+      ${state.searchView.note ? `<span class="search-summary-note">${escapeHtml(state.searchView.note)}</span>` : ""}
+      <span class="search-summary-actions">
+        <button type="button" class="btn search-edit-button">Edit search</button>
+        <button type="button" class="btn search-clear-button">Clear search</button>
+      </span>
+    `;
+    info.querySelector(".search-edit-button").addEventListener("click", openSearchModal);
+    info.querySelector(".search-clear-button").addEventListener("click", clearSearch);
+    panel.querySelector(".active-topic-heading").after(info);
+  }
+
   const grid = panel.querySelector(".papers-grid");
   // "Most Interesting" shows the top papers first; the rest that passed the score checks sit behind "Show more".
   const isInteresting = activeGroup.topic.id === interestingTopic.id;
@@ -549,8 +579,9 @@ function render() {
 function renderTopicNav(grouped) {
   topicNav.innerHTML = "";
   const sections = [
+    { title: "arXiv search", groups: grouped.filter((group) => group.topic.id === searchTopic.id) },
     { title: "Your library", groups: grouped.filter((group) => personalTopicIds.has(group.topic.id)) },
-    { title: "Science topics", groups: grouped.filter((group) => !personalTopicIds.has(group.topic.id)) }
+    { title: "Science topics", groups: grouped.filter((group) => !personalTopicIds.has(group.topic.id) && group.topic.id !== searchTopic.id) }
   ];
 
   sections.filter((section) => section.groups.length).forEach((section) => {
@@ -968,6 +999,176 @@ function showToast(message) {
     toast.classList.remove("toast--visible");
     window.setTimeout(() => { toast.hidden = true; }, 250);
   }, 3500);
+}
+
+// ===== Full-arXiv search =====
+const searchModal = document.querySelector("#searchModal");
+const searchForm = document.querySelector("#searchForm");
+const searchFields = {
+  firstAuthor: document.querySelector("#searchFirstAuthor"),
+  author: document.querySelector("#searchAuthor"),
+  authorAfter: document.querySelector("#searchAuthorAfter"),
+  from: document.querySelector("#searchFrom"),
+  to: document.querySelector("#searchTo"),
+  ids: document.querySelector("#searchIds"),
+  astroph: document.querySelector("#searchAstroph")
+};
+const searchStatus = document.querySelector("#searchStatus");
+const searchSubmitButton = document.querySelector("#searchSubmitButton");
+
+document.querySelector("#openSearchButton").addEventListener("click", openSearchModal);
+document.querySelector("#searchCloseButton").addEventListener("click", () => searchModal.close());
+document.querySelector("#searchResetButton").addEventListener("click", () => {
+  searchForm.reset();
+  searchStatus.textContent = "";
+  searchFields.firstAuthor.focus();
+});
+searchForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  runSearch();
+});
+
+function openSearchModal() {
+  searchStatus.textContent = "";
+  searchModal.showModal();
+  searchFields.firstAuthor.focus();
+}
+
+function clearSearch() {
+  state.searchView = null;
+  state.activeTopicId = null;
+  render();
+}
+
+function normalizeNameText(value) {
+  return (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z\s'-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// "Rubin, V", "V. Rubin", "Vera Rubin" or "Rubin" -> surname tokens + optional first initial.
+function parseAuthorQuery(value) {
+  const clean = (value || "").trim();
+
+  if (!clean) {
+    return null;
+  }
+
+  let surname;
+  let given;
+
+  if (clean.includes(",")) {
+    [surname, given] = clean.split(/,(.*)/s);
+  } else {
+    const parts = clean.split(/\s+/);
+    surname = parts.pop();
+    given = parts.join(" ");
+  }
+
+  const surnameTokens = normalizeNameText(surname).split(" ").filter(Boolean);
+  return surnameTokens.length ? { surname: surnameTokens, initial: normalizeNameText(given)[0] || "" } : null;
+}
+
+function authorMatchesQuery(author, query) {
+  const tokens = normalizeNameText(author).split(" ").filter(Boolean);
+  const length = query.surname.length;
+
+  if (tokens.length < length || tokens.slice(-length).join(" ") !== query.surname.join(" ")) {
+    return false;
+  }
+
+  const given = tokens.slice(0, tokens.length - length);
+  return !query.initial || (given.length > 0 && given[0][0] === query.initial);
+}
+
+function describeSearch(criteria) {
+  const parts = [];
+
+  if (criteria.firstAuthor) parts.push(`first author ${criteria.firstAuthor}`);
+  if (criteria.author) parts.push(`author ${criteria.author}${criteria.authorAfter > 0 ? ` at position > ${criteria.authorAfter}` : ""}`);
+  if (criteria.from || criteria.to) parts.push(`submitted ${criteria.from ? formatDate(criteria.from) : "…"} – ${criteria.to ? formatDate(criteria.to) : "today"}`);
+  if (criteria.ids) parts.push(`arXiv ${criteria.ids}`);
+  if (criteria.astroph) parts.push("astro-ph only");
+  return parts.join(" · ");
+}
+
+async function runSearch() {
+  const criteria = {
+    firstAuthor: searchFields.firstAuthor.value.trim(),
+    author: searchFields.author.value.trim(),
+    authorAfter: Math.max(0, Number.parseInt(searchFields.authorAfter.value, 10) || 0),
+    from: searchFields.from.value,
+    to: searchFields.to.value,
+    ids: searchFields.ids.value.trim(),
+    astroph: searchFields.astroph.checked
+  };
+  const firstAuthorQuery = parseAuthorQuery(criteria.firstAuthor);
+  const authorQuery = parseAuthorQuery(criteria.author);
+
+  if (!firstAuthorQuery && !authorQuery && !criteria.from && !criteria.to && !criteria.ids) {
+    searchStatus.textContent = "Fill in at least an author, a date or an arXiv number.";
+    return;
+  }
+
+  if (criteria.from && criteria.to && criteria.from > criteria.to) {
+    searchStatus.textContent = "The \"from\" date is after the \"until\" date.";
+    return;
+  }
+
+  const params = new URLSearchParams();
+  if (criteria.firstAuthor) params.set("first_author", criteria.firstAuthor);
+  if (criteria.author) params.set("author", criteria.author);
+  if (criteria.from) params.set("from", criteria.from);
+  if (criteria.to) params.set("to", criteria.to);
+  if (criteria.ids) params.set("ids", criteria.ids);
+  if (criteria.astroph) params.set("astroph", "1");
+
+  searchSubmitButton.disabled = true;
+  searchStatus.textContent = "Searching arXiv…";
+
+  try {
+    const response = await fetch(`/api/search?${params}`);
+    const body = await response.text();
+
+    if (!response.ok) {
+      const parsed = safeJson(body);
+      throw new Error(parsed?.detail || parsed?.error || `Search failed with HTTP ${response.status}`);
+    }
+
+    const limit = Number(response.headers.get("x-search-limit")) || 0;
+    const fetched = parseArxivFeed(body).filter((paper) => paper.title && !paper.id.includes("/api/errors"));
+    const papers = fetched
+      .filter((paper) => !firstAuthorQuery || (paper.authors[0] && authorMatchesQuery(paper.authors[0], firstAuthorQuery)))
+      .filter((paper) => !authorQuery || paper.authors.some((name, index) => index + 1 > criteria.authorAfter && authorMatchesQuery(name, authorQuery)))
+      .map(scorePaper);
+
+    if (!papers.length) {
+      searchStatus.textContent = fetched.length
+        ? `arXiv returned ${fetched.length} papers for these names/dates, but none match the author position. Try a different spelling or position.`
+        : "No papers found. Try fewer fields or a different spelling.";
+      return;
+    }
+
+    state.searchView = {
+      papers,
+      summary: describeSearch(criteria),
+      note: limit && fetched.length >= limit
+        ? `Only the ${limit} most recent arXiv matches were checked — add a date range to reach older papers.`
+        : ""
+    };
+    state.activeTopicId = searchTopic.id;
+    searchModal.close();
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } catch (error) {
+    searchStatus.textContent = error.message;
+  } finally {
+    searchSubmitButton.disabled = false;
+  }
 }
 
 function sameSuggestion(entry, paper) {
