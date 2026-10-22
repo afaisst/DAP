@@ -179,8 +179,7 @@ input:focus, textarea:focus {
   border-color: var(--accent-strong);
 }
 
-.danger-button,
-#deleteAccountButton {
+.danger-button {
   min-height: 36px;
   border: 1px solid var(--danger) !important;
   border-radius: var(--radius-sm);
@@ -190,8 +189,7 @@ input:focus, textarea:focus {
   padding: 7px 14px;
 }
 
-.danger-button:hover,
-#deleteAccountButton:hover { background: var(--danger-strong) !important; border-color: var(--danger-strong) !important; }
+.danger-button:hover { background: var(--danger-strong) !important; border-color: var(--danger-strong) !important; }
 
 button:disabled { opacity: 0.5; }
 
@@ -1545,4 +1543,49 @@ kbd {
   font: 0.82rem/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
   padding: 12px;
   white-space: pre-wrap;
+}
+
+/* ===== Profile page sections ===== */
+.profile-stack { display: grid; gap: 18px; }
+.profile-section { gap: 18px; padding: 22px; }
+.profile-section > h2 { font-size: 1.15rem; }
+
+.profile-subsection { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 16px; }
+.profile-subsection h3 { margin: 0; font-size: 0.98rem; font-weight: 700; }
+
+.profile-two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.profile-three-col { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+
+.profile-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.profile-footer .save-status { margin-left: auto; text-align: right; }
+
+.save-status { color: var(--muted); font-size: 0.88rem; font-weight: 600; }
+.save-status--ok { color: #2f8a5a; }
+.save-status--error { color: var(--danger); }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .save-status--ok { color: #5fd08f; }
+}
+:root[data-theme="dark"] .save-status--ok { color: #5fd08f; }
+
+.btn-small { min-height: 32px; padding: 4px 12px; font-size: 0.84rem; }
+
+.btn-danger-outline { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); color: var(--danger); background: var(--surface); }
+.btn-danger-outline:hover:not(:disabled) { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+.btn:disabled { cursor: not-allowed; opacity: 0.45; }
+
+.name-alias-row { max-width: 520px; }
+
+@media (max-width: 720px) {
+  .profile-two-col, .profile-three-col { grid-template-columns: 1fr; }
+  .profile-footer .save-status { flex-basis: 100%; order: 3; margin-left: 0; text-align: left; }
 }

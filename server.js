@@ -632,6 +632,24 @@ async function handleProfile(req, res) {
   }
 
   const { fullName, orcid, nameAliases } = sanitizeProfileFields(payload);
+
+  // Optional email digest settings, saved together with the profile.
+  if ("digest" in payload || "email" in payload) {
+    const email = typeof payload.email === "string" ? payload.email.trim().slice(0, 200) : "";
+    const digest = digestModes[payload.digest] ? payload.digest : "off";
+
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return json(res, 400, { error: "That email address does not look right." });
+    }
+
+    if (digest !== "off" && !email) {
+      return json(res, 400, { error: "Enter an email address to receive the digest." });
+    }
+
+    auth.user.email = email;
+    auth.user.digest = digest;
+  }
+
   auth.user.fullName = fullName;
   auth.user.orcid = orcid;
   auth.user.nameAliases = nameAliases;

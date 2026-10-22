@@ -26,70 +26,79 @@
         <div id="profileStatus" class="auth-status">Loading profile...</div>
       </section>
 
-      <section class="profile-grid" aria-live="polite">
-        <article class="profile-card">
-          <h2>Author details</h2>
-          <label class="profile-field">
-            <span>Full name</span>
-            <input id="fullNameInput" type="text" autocomplete="name" placeholder="Full name">
-          </label>
-          <label class="profile-field">
-            <span>ORCID</span>
-            <input id="orcidInput" type="text" autocomplete="off" placeholder="0000-0000-0000-0000">
-          </label>
-          <div class="profile-actions">
-            <button id="saveProfileButton" type="button">Save profile</button>
+      <section class="profile-stack" aria-live="polite">
+        <article class="profile-card profile-section" id="profileSection">
+          <h2>Profile settings</h2>
+
+          <div class="profile-subsection">
+            <h3>Author details</h3>
+            <div class="profile-two-col">
+              <label class="profile-field">
+                <span>Full name</span>
+                <input id="fullNameInput" type="text" autocomplete="name" placeholder="Full name">
+              </label>
+              <label class="profile-field">
+                <span>ORCID</span>
+                <input id="orcidInput" type="text" autocomplete="off" placeholder="0000-0000-0000-0000">
+              </label>
+            </div>
+          </div>
+
+          <div class="profile-subsection">
+            <h3>Author names for My Papers</h3>
+            <p class="profile-help">The ways your name appears on papers (for example "V. C. Rubin"). Papers with a matching author show up in My Papers.</p>
+            <div id="nameAliasesList" class="name-aliases-list"></div>
+            <div>
+              <button id="addNameAliasButton" type="button" class="btn btn-small">+ Add name</button>
+            </div>
+          </div>
+
+          <div class="profile-subsection">
+            <h3>Email digest</h3>
+            <p class="profile-help">Get your most interesting new papers by email at 7 am Pacific: <strong>daily</strong> (Monday–Friday, the 12 best from the latest arXiv batch) or <strong>weekly</strong> (Mondays, the 30 best from the previous week). Papers are ranked by your thumbs-up and thumbs-down votes, like the "Most Interesting" list.</p>
+            <label class="profile-field">
+              <span>Email address</span>
+              <input id="digestEmailInput" type="email" autocomplete="email" placeholder="you@example.edu">
+            </label>
+            <div class="digest-choice" role="radiogroup" aria-label="Digest frequency">
+              <label><input type="radio" name="digestMode" value="off" checked> Off</label>
+              <label><input type="radio" name="digestMode" value="daily"> Daily</label>
+              <label><input type="radio" name="digestMode" value="weekly"> Weekly</label>
+            </div>
+            <p id="digestHint" class="profile-help digest-hint" hidden>You haven't given any paper a thumbs up yet, so there is nothing to rank by and no digest will be sent. Like a few papers on the main page first.</p>
+          </div>
+
+          <div class="profile-footer">
+            <button id="deleteAccountButton" type="button" class="btn btn-danger-outline">Delete account</button>
+            <span id="profileSaveStatus" class="save-status" role="status"></span>
+            <button id="saveProfileButton" type="button" class="btn btn-primary" disabled>Save profile</button>
           </div>
         </article>
 
-        <article class="profile-card">
-          <h2>My Paper Settings</h2>
-          <p class="profile-help">Add the name variants that should count as you in My Papers.</p>
-          <div id="nameAliasesList" class="name-aliases-list"></div>
-          <div class="profile-actions">
-            <button id="addNameAliasButton" type="button" class="secondary-button">+ Add name</button>
-          </div>
-        </article>
-
-        <article class="profile-card">
+        <article class="profile-card profile-section" id="passwordSection">
           <h2>Password</h2>
-          <label class="profile-field">
-            <span>Current password</span>
-            <input id="currentPasswordInput" type="password" autocomplete="current-password">
-          </label>
-          <label class="profile-field">
-            <span>New password</span>
-            <input id="newPasswordInput" type="password" autocomplete="new-password">
-          </label>
-          <label class="profile-field">
-            <span>Confirm new password</span>
-            <input id="confirmPasswordInput" type="password" autocomplete="new-password">
-          </label>
-          <div class="profile-actions">
-            <button id="togglePasswordButton" type="button" class="secondary-button">Show passwords</button>
-            <button id="changePasswordButton" type="button">Change password</button>
+          <div class="profile-three-col">
+            <label class="profile-field">
+              <span>Current password</span>
+              <input id="currentPasswordInput" type="password" autocomplete="current-password">
+            </label>
+            <label class="profile-field">
+              <span>New password</span>
+              <input id="newPasswordInput" type="password" autocomplete="new-password">
+            </label>
+            <label class="profile-field">
+              <span>Confirm new password</span>
+              <input id="confirmPasswordInput" type="password" autocomplete="new-password">
+            </label>
+          </div>
+          <div class="profile-footer">
+            <button id="togglePasswordButton" type="button" class="btn">Show passwords</button>
+            <span id="passwordSaveStatus" class="save-status" role="status"></span>
+            <button id="changePasswordButton" type="button" class="btn btn-primary" disabled>Change password</button>
           </div>
         </article>
 
-        <article class="profile-card profile-card--wide">
-          <h2>Email digest</h2>
-          <p class="profile-help">Get your most interesting new papers by email at 7 am Pacific: <strong>daily</strong> (Monday–Friday, the 12 best from the latest arXiv batch) or <strong>weekly</strong> (Mondays, the 30 best from the previous week). Papers are ranked by your thumbs-up and thumbs-down votes, like the "Most Interesting" list.</p>
-          <label class="profile-field">
-            <span>Email address</span>
-            <input id="digestEmailInput" type="email" autocomplete="email" placeholder="you@example.edu">
-          </label>
-          <div class="digest-choice" role="radiogroup" aria-label="Digest frequency">
-            <label><input type="radio" name="digestMode" value="off" checked> Off</label>
-            <label><input type="radio" name="digestMode" value="daily"> Daily</label>
-            <label><input type="radio" name="digestMode" value="weekly"> Weekly</label>
-          </div>
-          <p id="digestHint" class="profile-help digest-hint" hidden>You haven't given any paper a thumbs up yet, so there is nothing to rank by and no digest will be sent. Like a few papers on the main page first.</p>
-          <div class="profile-actions">
-            <button id="saveDigestButton" type="button">Save digest settings</button>
-          </div>
-        </article>
-
-        <article class="profile-card profile-card--wide">
+        <article class="profile-card profile-section">
           <h2>What you like</h2>
           <p id="interestsSummary" class="profile-help">Give papers a thumbs up on the main page and Daily AstroPH learns which keywords you care about. They drive the "Most Interesting" list.</p>
           <div id="keywordCloud" class="keyword-cloud"></div>
@@ -99,16 +108,9 @@
             <summary>Rated papers</summary>
             <ul id="likedPapersList"></ul>
           </details>
-          <div class="profile-actions">
-            <button id="forgetLikesButton" type="button" class="danger-button" disabled>Forget everything</button>
-          </div>
-        </article>
-
-        <article class="profile-card profile-card--danger">
-          <h2>Account</h2>
-          <p class="profile-help">Delete this account and all saved data from the server.</p>
-          <div class="profile-actions">
-            <button id="deleteAccountButton" type="button" class="danger-button">Delete account</button>
+          <div class="profile-footer">
+            <span id="likesStatus" class="save-status" role="status"></span>
+            <button id="forgetLikesButton" type="button" class="btn btn-danger-outline" disabled>Forget everything</button>
           </div>
         </article>
       </section>
@@ -120,12 +122,12 @@
           <svg viewBox="0 0 20 20" width="22" height="22"><path d="M3.5 5.5h13M8 5.5V4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M5.2 5.5l.7 10.1a1.5 1.5 0 0 0 1.5 1.4h5.2a1.5 1.5 0 0 0 1.5-1.4l.7-10.1M8.5 8.5v5.5M11.5 8.5v5.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
         <div class="confirm-text">
-          <h2 id="confirmModalTitle">Forget everything?</h2>
-          <p>This removes all learned keywords, thumbs-ups and thumbs-downs, and the "Most Interesting" list starts from scratch. This cannot be undone.</p>
+          <h2 id="confirmModalTitle">Are you sure?</h2>
+          <p id="confirmModalText"></p>
         </div>
         <div class="confirm-actions">
           <button value="cancel" class="btn" type="submit">Cancel</button>
-          <button value="confirm" class="btn btn-danger" type="submit">Forget</button>
+          <button id="confirmModalButton" value="confirm" class="btn btn-danger" type="submit">Confirm</button>
         </div>
       </form>
     </dialog>

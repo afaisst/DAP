@@ -1,40 +1,56 @@
 import { aggregateKeywords, isDownVote } from "/interests.js";
 
-const profileStatus = document.querySelector("#profileStatus");
-const fullNameInput = document.querySelector("#fullNameInput");
-const orcidInput = document.querySelector("#orcidInput");
-const saveProfileButton = document.querySelector("#saveProfileButton");
-const nameAliasesList = document.querySelector("#nameAliasesList");
-const addNameAliasButton = document.querySelector("#addNameAliasButton");
-const currentPasswordInput = document.querySelector("#currentPasswordInput");
-const newPasswordInput = document.querySelector("#newPasswordInput");
-const confirmPasswordInput = document.querySelector("#confirmPasswordInput");
-const togglePasswordButton = document.querySelector("#togglePasswordButton");
-const changePasswordButton = document.querySelector("#changePasswordButton");
-const deleteAccountButton = document.querySelector("#deleteAccountButton");
-const interestsSummary = document.querySelector("#interestsSummary");
-const keywordCloud = document.querySelector("#keywordCloud");
-const likedPapers = document.querySelector("#likedPapers");
-const likedPapersList = document.querySelector("#likedPapersList");
-const forgetLikesButton = document.querySelector("#forgetLikesButton");
-const digestEmailInput = document.querySelector("#digestEmailInput");
-const saveDigestButton = document.querySelector("#saveDigestButton");
-const digestHint = document.querySelector("#digestHint");
-let hasThumbsUp = false;
-const negativeHeading = document.querySelector("#negativeHeading");
-const negativeCloud = document.querySelector("#negativeCloud");
+const $ = (selector) => document.querySelector(selector);
+
+const profileStatus = $("#profileStatus");
+
+// Profile section (author details, author names, email digest)
+const fullNameInput = $("#fullNameInput");
+const orcidInput = $("#orcidInput");
+const nameAliasesList = $("#nameAliasesList");
+const addNameAliasButton = $("#addNameAliasButton");
+const digestEmailInput = $("#digestEmailInput");
+const digestHint = $("#digestHint");
+const saveProfileButton = $("#saveProfileButton");
+const profileSaveStatus = $("#profileSaveStatus");
+const deleteAccountButton = $("#deleteAccountButton");
+
+// Password section
+const currentPasswordInput = $("#currentPasswordInput");
+const newPasswordInput = $("#newPasswordInput");
+const confirmPasswordInput = $("#confirmPasswordInput");
+const togglePasswordButton = $("#togglePasswordButton");
+const changePasswordButton = $("#changePasswordButton");
+const passwordSaveStatus = $("#passwordSaveStatus");
+
+// What you like section
+const interestsSummary = $("#interestsSummary");
+const keywordCloud = $("#keywordCloud");
+const negativeHeading = $("#negativeHeading");
+const negativeCloud = $("#negativeCloud");
+const likedPapers = $("#likedPapers");
+const likedPapersList = $("#likedPapersList");
+const forgetLikesButton = $("#forgetLikesButton");
+const likesStatus = $("#likesStatus");
 
 let sessionUser = null;
+let savedProfileSnapshot = "";
+let hasThumbsUp = false;
 let passwordsVisible = false;
 
-saveProfileButton.addEventListener("click", saveProfile);
+// ----- Wiring -----
+
+$("#profileSection").addEventListener("input", onProfileEdited);
+$("#profileSection").addEventListener("change", onProfileEdited);
 addNameAliasButton.addEventListener("click", () => addNameAliasInput("", true));
+saveProfileButton.addEventListener("click", saveProfile);
+deleteAccountButton.addEventListener("click", deleteAccount);
+
+[currentPasswordInput, newPasswordInput, confirmPasswordInput].forEach((input) => input.addEventListener("input", onPasswordEdited));
 togglePasswordButton.addEventListener("click", togglePasswordVisibility);
 changePasswordButton.addEventListener("click", changePassword);
-deleteAccountButton.addEventListener("click", deleteAccount);
+
 forgetLikesButton.addEventListener("click", forgetLikes);
-saveDigestButton.addEventListener("click", saveDigestSettings);
-document.querySelectorAll('input[name="digestMode"]').forEach((input) => input.addEventListener("change", updateDigestHint));
 
 init();
 
@@ -50,11 +66,8 @@ async function init() {
       return;
     }
 
-    fullNameInput.value = sessionUser.fullName || "";
-    orcidInput.value = sessionUser.orcid || "";
-    renderNameAliases(sessionUser.nameAliases || []);
-    profileStatus.textContent = `Currently signed in as ${sessionUser.username}.`;
-    renderDigestSettings(sessionUser);
+    profileStatus.textContent = `Signed in as ${sessionUser.username}.`;
+    fillProfileForm(sessionUser);
     await loadLikes();
   } catch (error) {
     profileStatus.textContent = `Could not load profile. ${error.message}`;
@@ -62,25 +75,66 @@ async function init() {
   }
 }
 
-async function saveProfile() {
-  if (!sessionUser) {
-    return;
-  }
+// ----- Status messages -----
 
+function setStatus(element, message, kind = "") {
+  element.textContent = message;
+  element.className = `save-status${kind ? ` save-status--${kind}` : ""}`;
+}
+
+// ----- Profile section -----
+
+function fillProfileForm(user) {
+  fullNameInput.value = user.fullName || "";
+  orcidInput.value = user.orcid || "";
+  renderNameAliases(user.nameAliases || []);
+  digestEmailInput.value = user.email || "";
+  const mode = ["off", "daily", "weekly"].includes(user.digest) ? user.digest : "off";
+  $(`input[name="digestMode"][value="${mode}"]`).checked = true;
+  savedProfileSnapshot = profileSnapshot();
+  updateProfileButton();
+  updateDigestHint();
+}
+
+function collectProfile() {
+  return {
+    fullName: fullNameInput.value.trim(),
+    orcid: orcidInput.value.trim(),
+    nameAliases: getNameAliases(),
+    email: digestEmailInput.value.trim(),
+    digest: selectedDigestMode()
+  };
+}
+
+function profileSnapshot() {
+  return JSON.stringify(collectProfile());
+}
+
+function updateProfileButton() {
+  saveProfileButton.disabled = !sessionUser || profileSnapshot() === savedProfileSnapshot;
+}
+
+function onProfileEdited() {
+  updateProfileButton();
+  updateDigestHint();
+
+  if (!saveProfileButton.disabled) {
+    setStatus(profileSaveStatus, "Unsaved changes");
+  } else if (!profileSaveStatus.classList.contains("save-status--ok")) {
+    // Edited back to the saved state: drop "Unsaved changes" / old errors, keep a fresh "✓ saved".
+    setStatus(profileSaveStatus, "");
+  }
+}
+
+async function saveProfile() {
   saveProfileButton.disabled = true;
-  profileStatus.textContent = "Saving profile...";
+  setStatus(profileSaveStatus, "Saving…");
 
   try {
     const response = await fetch("/api/profile", {
       method: "PUT",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        fullName: fullNameInput.value.trim(),
-        orcid: orcidInput.value.trim(),
-        nameAliases: getNameAliases()
-      })
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(collectProfile())
     });
     const data = await response.json();
 
@@ -88,13 +142,12 @@ async function saveProfile() {
       throw new Error(data.error || "Could not save profile.");
     }
 
-    sessionUser = data.user;
-    renderNameAliases(sessionUser.nameAliases || []);
-    profileStatus.textContent = "Profile saved.";
+    sessionUser = { ...sessionUser, ...data.user };
+    fillProfileForm(sessionUser);
+    setStatus(profileSaveStatus, "✓ Profile saved", "ok");
   } catch (error) {
-    profileStatus.textContent = error.message;
-  } finally {
-    saveProfileButton.disabled = false;
+    setStatus(profileSaveStatus, error.message, "error");
+    updateProfileButton();
   }
 }
 
@@ -108,19 +161,20 @@ function addNameAliasInput(value, shouldFocus = true) {
   const row = document.createElement("div");
   row.className = "name-alias-row";
   row.innerHTML = `
-    <input type="text" value="" placeholder="Vera C. Rubin">
-    <button type="button" aria-label="Remove name variant">-</button>
+    <input type="text" value="" placeholder="Vera C. Rubin" aria-label="Author name variant">
+    <button type="button" aria-label="Remove name variant" title="Remove">−</button>
   `;
 
   const input = row.querySelector("input");
-  const removeButton = row.querySelector("button");
   input.value = value;
-  removeButton.addEventListener("click", () => {
+  row.querySelector("button").addEventListener("click", () => {
     row.remove();
 
     if (!nameAliasesList.children.length) {
       addNameAliasInput("", true);
     }
+
+    onProfileEdited();
   });
   nameAliasesList.appendChild(row);
 
@@ -146,69 +200,27 @@ function getNameAliases() {
     });
 }
 
-async function changePassword() {
-  if (!sessionUser) {
-    return;
-  }
+function selectedDigestMode() {
+  return $('input[name="digestMode"]:checked')?.value || "off";
+}
 
-  const currentPassword = currentPasswordInput.value;
-  const newPassword = newPasswordInput.value;
-  const confirmPassword = confirmPasswordInput.value;
-
-  if (!currentPassword || !newPassword || !confirmPassword) {
-    profileStatus.textContent = "Enter the current password and the new password twice.";
-    return;
-  }
-
-  if (newPassword !== confirmPassword) {
-    profileStatus.textContent = "The new password fields do not match.";
-    return;
-  }
-
-  changePasswordButton.disabled = true;
-  profileStatus.textContent = "Changing password...";
-
-  try {
-    const response = await fetch("/api/password", {
-      method: "PUT",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        currentPassword,
-        newPassword
-      })
-    });
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || "Could not change password.");
-    }
-
-    currentPasswordInput.value = "";
-    newPasswordInput.value = "";
-    confirmPasswordInput.value = "";
-    profileStatus.textContent = "Password changed.";
-  } catch (error) {
-    profileStatus.textContent = error.message;
-  } finally {
-    changePasswordButton.disabled = false;
-  }
+function updateDigestHint() {
+  digestHint.hidden = selectedDigestMode() === "off" || hasThumbsUp;
 }
 
 async function deleteAccount() {
-  if (!sessionUser) {
-    return;
-  }
-
-  const confirmed = window.confirm("Delete this account and all saved data from the server? This cannot be undone.");
+  const confirmed = await confirmAction({
+    title: "Delete your account?",
+    text: "This deletes your account and all saved data (favorites, likes, suggestions, settings) from the server. This cannot be undone.",
+    button: "Delete account"
+  });
 
   if (!confirmed) {
     return;
   }
 
   deleteAccountButton.disabled = true;
-  profileStatus.textContent = "Deleting account...";
+  setStatus(profileSaveStatus, "Deleting account…");
 
   try {
     const response = await fetch("/api/account", { method: "DELETE" });
@@ -220,41 +232,67 @@ async function deleteAccount() {
 
     window.location.href = "/";
   } catch (error) {
-    profileStatus.textContent = error.message;
+    setStatus(profileSaveStatus, error.message, "error");
     deleteAccountButton.disabled = false;
+  }
+}
+
+// ----- Password section -----
+
+function onPasswordEdited() {
+  const filled = currentPasswordInput.value && newPasswordInput.value && confirmPasswordInput.value;
+  const mismatch = newPasswordInput.value && confirmPasswordInput.value && newPasswordInput.value !== confirmPasswordInput.value;
+  changePasswordButton.disabled = !filled || mismatch;
+
+  if (mismatch) {
+    setStatus(passwordSaveStatus, "The new passwords do not match", "error");
+  } else if (currentPasswordInput.value || newPasswordInput.value || confirmPasswordInput.value) {
+    setStatus(passwordSaveStatus, filled ? "" : "Fill in all three fields");
+  } else {
+    setStatus(passwordSaveStatus, "");
+  }
+}
+
+async function changePassword() {
+  changePasswordButton.disabled = true;
+  setStatus(passwordSaveStatus, "Changing password…");
+
+  try {
+    const response = await fetch("/api/password", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ currentPassword: currentPasswordInput.value, newPassword: newPasswordInput.value })
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Could not change password.");
+    }
+
+    currentPasswordInput.value = "";
+    newPasswordInput.value = "";
+    confirmPasswordInput.value = "";
+    setStatus(passwordSaveStatus, "✓ Password changed", "ok");
+  } catch (error) {
+    setStatus(passwordSaveStatus, error.message, "error");
+    changePasswordButton.disabled = false;
   }
 }
 
 function togglePasswordVisibility() {
   passwordsVisible = !passwordsVisible;
   const type = passwordsVisible ? "text" : "password";
-  currentPasswordInput.type = type;
-  newPasswordInput.type = type;
-  confirmPasswordInput.type = type;
+  [currentPasswordInput, newPasswordInput, confirmPasswordInput].forEach((input) => { input.type = type; });
   togglePasswordButton.textContent = passwordsVisible ? "Hide passwords" : "Show passwords";
 }
 
 function setFormDisabled(disabled) {
-  [
-    fullNameInput,
-    orcidInput,
-    saveProfileButton,
-    addNameAliasButton,
-    currentPasswordInput,
-    newPasswordInput,
-    confirmPasswordInput,
-    togglePasswordButton,
-    changePasswordButton,
-    deleteAccountButton,
-    digestEmailInput,
-    saveDigestButton
-  ].forEach((element) => {
-    element.disabled = disabled;
-  });
-  nameAliasesList.querySelectorAll("input, button").forEach((element) => {
+  document.querySelectorAll(".profile-section input, .profile-section button").forEach((element) => {
     element.disabled = disabled;
   });
 }
+
+// ----- What you like section -----
 
 async function loadLikes() {
   try {
@@ -287,49 +325,6 @@ function renderKeywordChips(container, keywords, negative) {
   });
 }
 
-function selectedDigestMode() {
-  return document.querySelector('input[name="digestMode"]:checked')?.value || "off";
-}
-
-function updateDigestHint() {
-  digestHint.hidden = selectedDigestMode() === "off" || hasThumbsUp;
-}
-
-function renderDigestSettings(user) {
-  digestEmailInput.value = user.email || "";
-  const mode = ["off", "daily", "weekly"].includes(user.digest) ? user.digest : "off";
-  document.querySelector(`input[name="digestMode"][value="${mode}"]`).checked = true;
-  updateDigestHint();
-}
-
-async function saveDigestSettings() {
-  saveDigestButton.disabled = true;
-  profileStatus.textContent = "Saving digest settings...";
-
-  try {
-    const response = await fetch("/api/digest-settings", {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: digestEmailInput.value.trim(), digest: selectedDigestMode() })
-    });
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || "Could not save digest settings.");
-    }
-
-    sessionUser = { ...sessionUser, ...data.user };
-    renderDigestSettings(sessionUser);
-    profileStatus.textContent = data.user.digest === "off"
-      ? "Digest settings saved. Email digest is off."
-      : `Digest settings saved. You'll get a ${data.user.digest} digest at ${data.user.email}.`;
-  } catch (error) {
-    profileStatus.textContent = error.message;
-  } finally {
-    saveDigestButton.disabled = false;
-  }
-}
-
 function renderLikes(liked) {
   hasThumbsUp = liked.some((entry) => !isDownVote(entry));
   updateDigestHint();
@@ -348,7 +343,7 @@ function renderLikes(liked) {
   forgetLikesButton.disabled = !liked.length;
 
   if (!liked.length) {
-    interestsSummary.textContent = "Nothing learned yet. Give papers a thumbs up (or thumbs down) on the main page and Daily AstroPH learns which keywords you care about. They drive the \"Most Interesting\" list.";
+    interestsSummary.textContent = "Nothing learned yet. Give papers a thumbs up (or thumbs down) on the main page and Daily AstroPH learns which keywords you care about. They drive the \"Most Interesting\" list and your email digest.";
     return;
   }
 
@@ -369,19 +364,14 @@ function renderLikes(liked) {
   });
 }
 
-function confirmForget() {
-  const modal = document.querySelector("#confirmModal");
-  modal.returnValue = "";
-
-  return new Promise((resolve) => {
-    modal.addEventListener("close", () => resolve(modal.returnValue === "confirm"), { once: true });
-    modal.showModal();
-    modal.querySelector('button[value="cancel"]').focus();
-  });
-}
-
 async function forgetLikes() {
-  if (!(await confirmForget())) {
+  const confirmed = await confirmAction({
+    title: "Forget everything?",
+    text: "This removes all learned keywords, thumbs-ups and thumbs-downs, and the \"Most Interesting\" list starts from scratch. This cannot be undone.",
+    button: "Forget"
+  });
+
+  if (!confirmed) {
     return;
   }
 
@@ -400,9 +390,25 @@ async function forgetLikes() {
     }
 
     renderLikes([]);
-    profileStatus.textContent = "Everything learned has been forgotten.";
+    setStatus(likesStatus, "✓ Everything learned has been forgotten", "ok");
   } catch (error) {
-    profileStatus.textContent = error.message;
+    setStatus(likesStatus, error.message, "error");
     forgetLikesButton.disabled = false;
   }
+}
+
+// ----- Confirmation dialog -----
+
+function confirmAction({ title, text, button }) {
+  const modal = $("#confirmModal");
+  $("#confirmModalTitle").textContent = title;
+  $("#confirmModalText").textContent = text;
+  $("#confirmModalButton").textContent = button;
+  modal.returnValue = "";
+
+  return new Promise((resolve) => {
+    modal.addEventListener("close", () => resolve(modal.returnValue === "confirm"), { once: true });
+    modal.showModal();
+    modal.querySelector('button[value="cancel"]').focus();
+  });
 }
