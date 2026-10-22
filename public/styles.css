@@ -1494,3 +1494,9 @@ kbd {
 }
 .doc-section ul + p { margin-top: 12px; }
 .header-actions .icon-btn { width: 40px; height: 40px; border-radius: 50%; }
+
+.search-category-row { display: grid; gap: 8px; margin-top: -4px; }
+.search-category-row .filter-heading { padding: 0; }
+
+.position-range { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; }
+.position-range span { color: var(--muted); }

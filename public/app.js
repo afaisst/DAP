@@ -1007,19 +1007,42 @@ const searchForm = document.querySelector("#searchForm");
 const searchFields = {
   firstAuthor: document.querySelector("#searchFirstAuthor"),
   author: document.querySelector("#searchAuthor"),
-  authorAfter: document.querySelector("#searchAuthorAfter"),
+  positionFrom: document.querySelector("#searchPositionFrom"),
+  positionTo: document.querySelector("#searchPositionTo"),
   from: document.querySelector("#searchFrom"),
   to: document.querySelector("#searchTo"),
   ids: document.querySelector("#searchIds"),
   astroph: document.querySelector("#searchAstroph")
 };
+const searchCategoryRow = document.querySelector("#searchCategoryRow");
+const searchCategories = document.querySelector("#searchCategories");
 const searchStatus = document.querySelector("#searchStatus");
+
+// Same chips (and colors) as the daily Classifications filter; all selected by default.
+astroPhCategories.forEach((category) => {
+  const label = document.createElement("label");
+  label.className = "category-filter";
+  label.dataset.category = category.id;
+  label.title = category.id;
+  label.innerHTML = `
+    <input type="checkbox" value="${category.id}" checked>
+    <span><strong>${category.id.replace("astro-ph.", "")}</strong> ${category.label}</span>
+  `;
+  searchCategories.appendChild(label);
+});
+
+function updateSearchCategoryRow() {
+  searchCategoryRow.hidden = !searchFields.astroph.checked;
+}
+
+searchFields.astroph.addEventListener("change", updateSearchCategoryRow);
 const searchSubmitButton = document.querySelector("#searchSubmitButton");
 
 document.querySelector("#openSearchButton").addEventListener("click", openSearchModal);
 document.querySelector("#searchCloseButton").addEventListener("click", () => searchModal.close());
 document.querySelector("#searchResetButton").addEventListener("click", () => {
   searchForm.reset();
+  updateSearchCategoryRow();
   searchStatus.textContent = "";
   searchFields.firstAuthor.focus();
 });
@@ -1085,14 +1108,25 @@ function authorMatchesQuery(author, query) {
   return !query.initial || (given.length > 0 && given[0][0] === query.initial);
 }
 
+function describePositionRange({ positionFrom, positionTo }) {
+  if (positionFrom && positionTo) return positionFrom === positionTo ? ` at position ${positionFrom}` : ` at position ${positionFrom}–${positionTo}`;
+  if (positionFrom) return ` at position ${positionFrom} or later`;
+  if (positionTo) return ` at position ${positionTo} or earlier`;
+  return "";
+}
+
 function describeSearch(criteria) {
   const parts = [];
 
   if (criteria.firstAuthor) parts.push(`first author ${criteria.firstAuthor}`);
-  if (criteria.author) parts.push(`author ${criteria.author}${criteria.authorAfter > 0 ? ` at position > ${criteria.authorAfter}` : ""}`);
+  if (criteria.author) parts.push(`author ${criteria.author}${describePositionRange(criteria)}`);
   if (criteria.from || criteria.to) parts.push(`submitted ${criteria.from ? formatDate(criteria.from) : "…"} – ${criteria.to ? formatDate(criteria.to) : "today"}`);
   if (criteria.ids) parts.push(`arXiv ${criteria.ids}`);
-  if (criteria.astroph) parts.push("astro-ph only");
+  if (criteria.astroph) {
+    parts.push(criteria.categories.length < astroPhCategories.length
+      ? `astro-ph ${criteria.categories.map((id) => id.replace("astro-ph.", "")).join(", ")}`
+      : "astro-ph only");
+  }
   return parts.join(" · ");
 }
 
@@ -1100,17 +1134,34 @@ async function runSearch() {
   const criteria = {
     firstAuthor: searchFields.firstAuthor.value.trim(),
     author: searchFields.author.value.trim(),
-    authorAfter: Math.max(0, Number.parseInt(searchFields.authorAfter.value, 10) || 0),
+    positionFrom: Math.max(0, Number.parseInt(searchFields.positionFrom.value, 10) || 0),
+    positionTo: Math.max(0, Number.parseInt(searchFields.positionTo.value, 10) || 0),
     from: searchFields.from.value,
     to: searchFields.to.value,
     ids: searchFields.ids.value.trim(),
-    astroph: searchFields.astroph.checked
+    astroph: searchFields.astroph.checked,
+    categories: [...searchCategories.querySelectorAll("input:checked")].map((input) => input.value)
   };
   const firstAuthorQuery = parseAuthorQuery(criteria.firstAuthor);
   const authorQuery = parseAuthorQuery(criteria.author);
 
   if (!firstAuthorQuery && !authorQuery && !criteria.from && !criteria.to && !criteria.ids) {
     searchStatus.textContent = "Fill in at least an author, a date or an arXiv number.";
+    return;
+  }
+
+  if (criteria.astroph && !criteria.categories.length) {
+    searchStatus.textContent = "Select at least one classification, or uncheck \"Only astro-ph papers\".";
+    return;
+  }
+
+  if (criteria.positionFrom && criteria.positionTo && criteria.positionFrom > criteria.positionTo) {
+    searchStatus.textContent = "The first author position is larger than the last one.";
+    return;
+  }
+
+  if ((criteria.positionFrom || criteria.positionTo) && !authorQuery) {
+    searchStatus.textContent = "Enter an author name to use the author position.";
     return;
   }
 
@@ -1125,7 +1176,13 @@ async function runSearch() {
   if (criteria.from) params.set("from", criteria.from);
   if (criteria.to) params.set("to", criteria.to);
   if (criteria.ids) params.set("ids", criteria.ids);
-  if (criteria.astroph) params.set("astroph", "1");
+  if (criteria.astroph) {
+    params.set("astroph", "1");
+
+    if (criteria.categories.length < astroPhCategories.length) {
+      params.set("cats", criteria.categories.join(","));
+    }
+  }
 
   searchSubmitButton.disabled = true;
   searchStatus.textContent = "Searching arXiv…";
@@ -1143,7 +1200,12 @@ async function runSearch() {
     const fetched = parseArxivFeed(body).filter((paper) => paper.title && !paper.id.includes("/api/errors"));
     const papers = fetched
       .filter((paper) => !firstAuthorQuery || (paper.authors[0] && authorMatchesQuery(paper.authors[0], firstAuthorQuery)))
-      .filter((paper) => !authorQuery || paper.authors.some((name, index) => index + 1 > criteria.authorAfter && authorMatchesQuery(name, authorQuery)))
+      .filter((paper) => !authorQuery || paper.authors.some((name, index) => {
+        const position = index + 1;
+        return (!criteria.positionFrom || position >= criteria.positionFrom)
+          && (!criteria.positionTo || position <= criteria.positionTo)
+          && authorMatchesQuery(name, authorQuery);
+      }))
       .map(scorePaper);
 
     if (!papers.length) {

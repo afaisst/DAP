@@ -1068,7 +1068,12 @@ async function handleSearch(req, res) {
     terms.push(`submittedDate:[${from || "19910101"}0000 TO ${to || "29991231"}2359]`);
   }
 
-  if (q.get("astroph") === "1") {
+  const allowedCategories = ["astro-ph.CO", "astro-ph.GA", "astro-ph.HE", "astro-ph.IM", "astro-ph.SR", "astro-ph.EP"];
+  const categories = (q.get("cats") || "").split(",").filter((category) => allowedCategories.includes(category));
+
+  if (categories.length) {
+    terms.push(categories.length === 1 ? `cat:${categories[0]}` : `(${categories.map((category) => `cat:${category}`).join(" OR ")})`);
+  } else if (q.get("astroph") === "1") {
     terms.push("cat:astro-ph*");
   }
 

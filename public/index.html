@@ -264,10 +264,14 @@
             <span>Author</span>
             <input id="searchAuthor" type="text" placeholder="e.g. Rubin, V" autocomplete="off">
           </label>
-          <label class="search-field search-field--narrow">
-            <span>at position later than</span>
-            <input id="searchAuthorAfter" type="number" min="0" max="5000" step="1" placeholder="any">
-          </label>
+          <div class="search-field">
+            <span id="searchPositionLabel">at author position between</span>
+            <div class="position-range" role="group" aria-labelledby="searchPositionLabel">
+              <input id="searchPositionFrom" type="number" min="1" max="5000" step="1" placeholder="first" aria-label="From position">
+              <span aria-hidden="true">–</span>
+              <input id="searchPositionTo" type="number" min="1" max="5000" step="1" placeholder="last" aria-label="To position">
+            </div>
+          </div>
 
           <label class="search-field">
             <span>Submitted from</span>
@@ -284,12 +288,16 @@
           </label>
 
           <label class="search-check search-field--wide">
-            <input id="searchAstroph" type="checkbox">
+            <input id="searchAstroph" type="checkbox" checked>
             <span>Only astro-ph papers</span>
           </label>
+          <div id="searchCategoryRow" class="search-field--wide search-category-row">
+            <span class="filter-heading">Classifications</span>
+            <div id="searchCategories" class="category-filters"></div>
+          </div>
         </div>
 
-        <p class="search-hint">Fill in any combination; all filled fields must match. "Rubin, V" and "V. Rubin" both work. Position later than 3 means 4th author or later.</p>
+        <p class="search-hint">Fill in any combination; all filled fields must match. A paper counts for a classification if it is listed in it (also as cross-listing). "Rubin, V" and "V. Rubin" both work. Position 4 – 6 means 4th, 5th or 6th author; leave a box empty for no limit on that side.</p>
         <div id="searchStatus" class="search-status" aria-live="polite"></div>
 
         <div class="confirm-actions">
