@@ -8,6 +8,7 @@
     "import:users": "node scripts/import-users-to-postgres.js"
   },
   "dependencies": {
+    "nodemailer": "^10.2.0",
     "pg": "^8.16.3"
   }
 }

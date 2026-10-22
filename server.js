@@ -1,4 +1,5 @@
 import { ArxivBusyError, arxivStatus, cachedArxiv } from "./arxiv-client.js";
+import { buildDigest, digestModes, schedulerEnabled, sendDigestEmail, smtpConfigured, startDigestScheduler, todayInPacific } from "./digest.js";
 import http from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
@@ -220,13 +221,19 @@ async function ensurePostgresSchema() {
         name_aliases JSONB NOT NULL DEFAULT '[]'::jsonb,
         suggestions JSONB NOT NULL DEFAULT '[]'::jsonb,
         liked JSONB NOT NULL DEFAULT '[]'::jsonb,
+        email TEXT NOT NULL DEFAULT '',
+        digest TEXT NOT NULL DEFAULT 'off',
+        digest_last_sent JSONB NOT NULL DEFAULT '{}'::jsonb,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `).then(() => pool.query(`
       ALTER TABLE dap_users
         ADD COLUMN IF NOT EXISTS name_aliases JSONB NOT NULL DEFAULT '[]'::jsonb,
         ADD COLUMN IF NOT EXISTS suggestions JSONB NOT NULL DEFAULT '[]'::jsonb,
-        ADD COLUMN IF NOT EXISTS liked JSONB NOT NULL DEFAULT '[]'::jsonb
+        ADD COLUMN IF NOT EXISTS liked JSONB NOT NULL DEFAULT '[]'::jsonb,
+        ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS digest TEXT NOT NULL DEFAULT 'off',
+        ADD COLUMN IF NOT EXISTS digest_last_sent JSONB NOT NULL DEFAULT '{}'::jsonb
     `)));
   }
 
@@ -246,6 +253,9 @@ function rowToUser(row) {
     nameAliases: Array.isArray(row.name_aliases) ? row.name_aliases : [],
     suggestions: Array.isArray(row.suggestions) ? row.suggestions : [],
     liked: Array.isArray(row.liked) ? row.liked : [],
+    email: row.email || "",
+    digest: row.digest || "off",
+    digestLastSent: row.digest_last_sent && typeof row.digest_last_sent === "object" ? row.digest_last_sent : {},
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
   };
 }
@@ -289,9 +299,12 @@ async function writePostgresUserStore(store) {
             name_aliases,
             suggestions,
             liked,
+            email,
+            digest,
+            digest_last_sent,
             created_at
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, COALESCE($12::timestamptz, NOW()))
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12, $13, $14::jsonb, COALESCE($15::timestamptz, NOW()))
           ON CONFLICT (username_key) DO UPDATE SET
             username = EXCLUDED.username,
             password_salt = EXCLUDED.password_salt,
@@ -302,7 +315,10 @@ async function writePostgresUserStore(store) {
             favorites = EXCLUDED.favorites,
             name_aliases = EXCLUDED.name_aliases,
             suggestions = EXCLUDED.suggestions,
-            liked = EXCLUDED.liked
+            liked = EXCLUDED.liked,
+            email = EXCLUDED.email,
+            digest = EXCLUDED.digest,
+            digest_last_sent = EXCLUDED.digest_last_sent
         `, [
           user.username,
           user.usernameKey,
@@ -315,6 +331,9 @@ async function writePostgresUserStore(store) {
           JSON.stringify(Array.isArray(user.nameAliases) ? user.nameAliases : []),
           JSON.stringify(Array.isArray(user.suggestions) ? user.suggestions : []),
           JSON.stringify(Array.isArray(user.liked) ? user.liked : []),
+          user.email || "",
+          user.digest || "off",
+          JSON.stringify(user.digestLastSent && typeof user.digestLastSent === "object" ? user.digestLastSent : {}),
           user.createdAt || null
         ]);
       }
@@ -384,6 +403,8 @@ function serializeUser(user) {
     fullName: user.fullName || "",
     orcid: user.orcid || "",
     nameAliases: sanitizeNameAliases(user.nameAliases),
+    email: user.email || "",
+    digest: digestModes[user.digest] ? user.digest : "off",
     isAdmin: isAdminUser(user)
   };
 }
@@ -799,6 +820,112 @@ async function handleLikes(req, res) {
 
   await writeUserStore(auth.store);
   return json(res, 200, { liked: auth.user.liked });
+}
+
+// Email digest settings for the logged-in user: { email, digest: "off" | "daily" | "weekly" }.
+async function handleDigestSettings(req, res) {
+  const auth = await getUserFromSession(req, res);
+
+  if (!auth) {
+    return;
+  }
+
+  if (req.method !== "PUT") {
+    return json(res, 405, { error: "Method not allowed." });
+  }
+
+  let payload;
+
+  try {
+    payload = await readJsonBody(req);
+  } catch {
+    return json(res, 400, { error: "Invalid JSON body." });
+  }
+
+  const email = typeof payload.email === "string" ? payload.email.trim().slice(0, 200) : "";
+  const digest = digestModes[payload.digest] ? payload.digest : "off";
+
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return json(res, 400, { error: "That email address does not look right." });
+  }
+
+  if (digest !== "off" && !email) {
+    return json(res, 400, { error: "Enter an email address to receive the digest." });
+  }
+
+  auth.user.email = email;
+  auth.user.digest = digest;
+  await writeUserStore(auth.store);
+  return json(res, 200, { user: serializeUser(auth.user) });
+}
+
+// Admin: digest status, preview or test-send to the admin's own email address.
+async function handleAdminDigest(req, res) {
+  const auth = await getUserFromSession(req, res);
+
+  if (!auth || !ensureAdmin(req, res, auth)) {
+    return;
+  }
+
+  if (req.method === "GET") {
+    const subscribers = (mode) => auth.store.users.filter((user) => user.digest === mode && user.email).length;
+    return json(res, 200, {
+      smtpConfigured: smtpConfigured(),
+      schedulerEnabled: schedulerEnabled(),
+      sender: process.env.GMAIL_USER || "",
+      adminEmail: auth.user.email || "",
+      subscribers: { daily: subscribers("daily"), weekly: subscribers("weekly") }
+    });
+  }
+
+  if (req.method !== "POST") {
+    return json(res, 405, { error: "Method not allowed." });
+  }
+
+  let payload;
+
+  try {
+    payload = await readJsonBody(req);
+  } catch {
+    return json(res, 400, { error: "Invalid JSON body." });
+  }
+
+  const mode = digestModes[payload.mode] ? payload.mode : "daily";
+
+  try {
+    const digest = await buildDigest(auth.user, mode, todayInPacific().date);
+    let sentTo = "";
+
+    if (payload.send === true) {
+      if (!auth.user.email) {
+        return json(res, 400, { error: "Add your email address on the profile page first." });
+      }
+
+      if (!digest.email) {
+        return json(res, 400, { error: `Nothing to send: ${digest.reason}` });
+      }
+
+      await sendDigestEmail(auth.user.email, { ...digest.email, subject: `[TEST] ${digest.email.subject}` });
+      sentTo = auth.user.email;
+    }
+
+    return json(res, 200, {
+      mode,
+      listingDates: digest.listingDates,
+      candidateCount: digest.candidateCount,
+      pickCount: digest.picks.length,
+      reason: digest.reason,
+      subject: digest.email?.subject || "",
+      text: digest.email?.text || "",
+      sentTo
+    });
+  } catch (error) {
+    if (error instanceof ArxivBusyError) {
+      return json(res, 503, { error: busyMessage(error) });
+    }
+
+    return json(res, 502, { error: `Could not build or send the digest: ${error.message}` });
+  }
 }
 
 async function handlePassword(req, res) {
@@ -1227,6 +1354,14 @@ async function handleAuth(req, res) {
     return handleLikes(req, res);
   }
 
+  if (url.pathname === "/api/digest-settings") {
+    return handleDigestSettings(req, res);
+  }
+
+  if (url.pathname === "/api/admin/digest") {
+    return handleAdminDigest(req, res);
+  }
+
   if (url.pathname === "/api/password") {
     return handlePassword(req, res);
   }
@@ -1291,6 +1426,8 @@ const server = http.createServer((req, res) => {
     || req.url?.startsWith("/api/users")
     || req.url?.startsWith("/api/suggestions")
     || req.url?.startsWith("/api/likes")
+    || req.url?.startsWith("/api/digest-settings")
+    || req.url?.startsWith("/api/admin/digest")
     || req.url?.startsWith("/api/password")
     || req.url?.startsWith("/api/account")
     || req.url?.startsWith("/api/admin/users")) {
@@ -1302,4 +1439,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(port, host, () => {
   console.log(`DailyAstroPH running at http://${host}:${port}`);
+  startDigestScheduler({ readUserStore, writeUserStore });
 });

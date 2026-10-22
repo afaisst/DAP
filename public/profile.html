@@ -72,6 +72,24 @@
         </article>
 
         <article class="profile-card profile-card--wide">
+          <h2>Email digest</h2>
+          <p class="profile-help">Get your most interesting new papers by email at 7 am Pacific: <strong>daily</strong> (Monday–Friday, the 12 best from the latest arXiv batch) or <strong>weekly</strong> (Mondays, the 30 best from the previous week). Papers are ranked by your thumbs-up and thumbs-down votes, like the "Most Interesting" list.</p>
+          <label class="profile-field">
+            <span>Email address</span>
+            <input id="digestEmailInput" type="email" autocomplete="email" placeholder="you@example.edu">
+          </label>
+          <div class="digest-choice" role="radiogroup" aria-label="Digest frequency">
+            <label><input type="radio" name="digestMode" value="off" checked> Off</label>
+            <label><input type="radio" name="digestMode" value="daily"> Daily</label>
+            <label><input type="radio" name="digestMode" value="weekly"> Weekly</label>
+          </div>
+          <p id="digestHint" class="profile-help digest-hint" hidden>You haven't given any paper a thumbs up yet, so there is nothing to rank by and no digest will be sent. Like a few papers on the main page first.</p>
+          <div class="profile-actions">
+            <button id="saveDigestButton" type="button">Save digest settings</button>
+          </div>
+        </article>
+
+        <article class="profile-card profile-card--wide">
           <h2>What you like</h2>
           <p id="interestsSummary" class="profile-help">Give papers a thumbs up on the main page and Daily AstroPH learns which keywords you care about. They drive the "Most Interesting" list.</p>
           <div id="keywordCloud" class="keyword-cloud"></div>

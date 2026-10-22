@@ -19,6 +19,7 @@ async function init() {
     }
 
     await loadUsers();
+    await loadDigestStatus();
   } catch (error) {
     adminStatus.textContent = `Could not load admin tools. ${error.message}`;
   }
@@ -63,6 +64,7 @@ function renderUsers(users) {
         <div class="admin-user-meta">
           <span>Full name: ${escapeHtml(user.fullName || "Not set")}</span>
           <span>ORCID: ${escapeHtml(user.orcid || "Not set")}</span>
+          <span>Digest: ${escapeHtml(user.digest && user.digest !== "off" ? `${user.digest} → ${user.email}` : "off")}</span>
           <span>Created: ${escapeHtml(formatDate(user.createdAt))}</span>
         </div>
         <div class="admin-user-actions"></div>
@@ -128,4 +130,70 @@ function escapeHtml(value) {
     '"': "&quot;",
     "'": "&#39;"
   }[char]));
+}
+
+const adminDigest = document.querySelector("#adminDigest");
+const digestStatus = document.querySelector("#digestStatus");
+const digestResult = document.querySelector("#digestResult");
+const digestPreview = document.querySelector("#digestPreview");
+
+adminDigest.querySelectorAll("button[data-mode]").forEach((button) => {
+  button.addEventListener("click", () => runDigest(button.dataset.mode, button.dataset.send === "true"));
+});
+
+async function loadDigestStatus() {
+  adminDigest.hidden = false;
+
+  try {
+    const response = await fetch("/api/admin/digest");
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Could not load digest status.");
+    }
+
+    const flag = (ok, yes, no) => `<span class="${ok ? "ok" : "off"}">${ok ? yes : no}</span>`;
+    digestStatus.innerHTML = [
+      `Gmail: ${flag(data.smtpConfigured, `configured (${escapeHtml(data.sender)})`, "not configured")}`,
+      `Schedule: ${flag(data.schedulerEnabled, "on", "off")}`,
+      `Subscribers: ${data.subscribers.daily} daily, ${data.subscribers.weekly} weekly`,
+      `Your email: ${data.adminEmail ? escapeHtml(data.adminEmail) : flag(false, "", "not set (add it on your profile)")}`
+    ].map((item) => `<span>${item}</span>`).join("");
+  } catch (error) {
+    digestStatus.textContent = error.message;
+  }
+}
+
+async function runDigest(mode, send) {
+  const buttons = adminDigest.querySelectorAll("button[data-mode]");
+  buttons.forEach((entry) => { entry.disabled = true; });
+  digestResult.textContent = send ? `Building and sending the ${mode} digest… (fetching arXiv can take a few seconds)` : `Building the ${mode} digest…`;
+  digestPreview.hidden = true;
+
+  try {
+    const response = await fetch("/api/admin/digest", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode, send })
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Digest failed.");
+    }
+
+    const period = data.listingDates.length === 1 ? data.listingDates[0] : `${data.listingDates[0]} – ${data.listingDates[data.listingDates.length - 1]}`;
+    digestResult.textContent = data.pickCount
+      ? `${data.sentTo ? `Sent to ${data.sentTo}. ` : ""}${data.pickCount} of ${data.candidateCount} astro-ph papers picked for the arXiv listing ${period}.`
+      : `No digest: ${data.reason} (${data.candidateCount} astro-ph papers in the listing ${period}).`;
+
+    if (data.text) {
+      digestPreview.textContent = `Subject: ${data.subject}\n\n${data.text}`;
+      digestPreview.hidden = false;
+    }
+  } catch (error) {
+    digestResult.textContent = error.message;
+  } finally {
+    buttons.forEach((entry) => { entry.disabled = false; });
+  }
 }

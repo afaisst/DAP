@@ -26,6 +26,20 @@
         <div id="adminStatus" class="auth-status">Loading members...</div>
       </section>
 
+      <section id="adminDigest" class="profile-card admin-digest" hidden>
+        <h2>Email digest</h2>
+        <div id="digestStatus" class="admin-digest-status">Loading…</div>
+        <p class="profile-help">Preview builds your own digest from the current arXiv data without sending it. "Send test" emails it to the address on your profile, marked [TEST]. Neither affects the regular 7 am schedule.</p>
+        <div class="admin-digest-actions">
+          <button type="button" class="btn" data-mode="daily" data-send="false">Preview daily</button>
+          <button type="button" class="btn" data-mode="weekly" data-send="false">Preview weekly</button>
+          <button type="button" class="btn btn-primary" data-mode="daily" data-send="true">Send test daily to me</button>
+          <button type="button" class="btn btn-primary" data-mode="weekly" data-send="true">Send test weekly to me</button>
+        </div>
+        <div id="digestResult" class="profile-help" aria-live="polite"></div>
+        <pre id="digestPreview" class="admin-digest-preview" hidden></pre>
+      </section>
+
       <section id="adminUsers" class="admin-users" aria-live="polite"></section>
     </main>
 

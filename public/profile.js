@@ -17,6 +17,10 @@ const keywordCloud = document.querySelector("#keywordCloud");
 const likedPapers = document.querySelector("#likedPapers");
 const likedPapersList = document.querySelector("#likedPapersList");
 const forgetLikesButton = document.querySelector("#forgetLikesButton");
+const digestEmailInput = document.querySelector("#digestEmailInput");
+const saveDigestButton = document.querySelector("#saveDigestButton");
+const digestHint = document.querySelector("#digestHint");
+let hasThumbsUp = false;
 const negativeHeading = document.querySelector("#negativeHeading");
 const negativeCloud = document.querySelector("#negativeCloud");
 
@@ -29,6 +33,8 @@ togglePasswordButton.addEventListener("click", togglePasswordVisibility);
 changePasswordButton.addEventListener("click", changePassword);
 deleteAccountButton.addEventListener("click", deleteAccount);
 forgetLikesButton.addEventListener("click", forgetLikes);
+saveDigestButton.addEventListener("click", saveDigestSettings);
+document.querySelectorAll('input[name="digestMode"]').forEach((input) => input.addEventListener("change", updateDigestHint));
 
 init();
 
@@ -48,6 +54,7 @@ async function init() {
     orcidInput.value = sessionUser.orcid || "";
     renderNameAliases(sessionUser.nameAliases || []);
     profileStatus.textContent = `Currently signed in as ${sessionUser.username}.`;
+    renderDigestSettings(sessionUser);
     await loadLikes();
   } catch (error) {
     profileStatus.textContent = `Could not load profile. ${error.message}`;
@@ -238,7 +245,9 @@ function setFormDisabled(disabled) {
     confirmPasswordInput,
     togglePasswordButton,
     changePasswordButton,
-    deleteAccountButton
+    deleteAccountButton,
+    digestEmailInput,
+    saveDigestButton
   ].forEach((element) => {
     element.disabled = disabled;
   });
@@ -278,7 +287,53 @@ function renderKeywordChips(container, keywords, negative) {
   });
 }
 
+function selectedDigestMode() {
+  return document.querySelector('input[name="digestMode"]:checked')?.value || "off";
+}
+
+function updateDigestHint() {
+  digestHint.hidden = selectedDigestMode() === "off" || hasThumbsUp;
+}
+
+function renderDigestSettings(user) {
+  digestEmailInput.value = user.email || "";
+  const mode = ["off", "daily", "weekly"].includes(user.digest) ? user.digest : "off";
+  document.querySelector(`input[name="digestMode"][value="${mode}"]`).checked = true;
+  updateDigestHint();
+}
+
+async function saveDigestSettings() {
+  saveDigestButton.disabled = true;
+  profileStatus.textContent = "Saving digest settings...";
+
+  try {
+    const response = await fetch("/api/digest-settings", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: digestEmailInput.value.trim(), digest: selectedDigestMode() })
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Could not save digest settings.");
+    }
+
+    sessionUser = { ...sessionUser, ...data.user };
+    renderDigestSettings(sessionUser);
+    profileStatus.textContent = data.user.digest === "off"
+      ? "Digest settings saved. Email digest is off."
+      : `Digest settings saved. You'll get a ${data.user.digest} digest at ${data.user.email}.`;
+  } catch (error) {
+    profileStatus.textContent = error.message;
+  } finally {
+    saveDigestButton.disabled = false;
+  }
+}
+
 function renderLikes(liked) {
+  hasThumbsUp = liked.some((entry) => !isDownVote(entry));
+  updateDigestHint();
+
   const keywords = aggregateKeywords(liked);
   const positive = keywords.filter((entry) => entry.weight > 0).slice(0, 60);
   const negative = keywords.filter((entry) => entry.weight < 0).reverse().slice(0, 30);
