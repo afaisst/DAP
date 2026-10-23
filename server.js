@@ -1,5 +1,5 @@
 import { ArxivBusyError, arxivStatus, cachedArxiv } from "./arxiv-client.js";
-import { buildDigest, digestModes, schedulerEnabled, sendDigestEmail, smtpConfigured, startDigestScheduler, todayInPacific } from "./digest.js";
+import { buildDigest, configureDigest, digestModes, schedulerEnabled, sendDigestEmail, smtpConfigured, startDigestScheduler, todayInPacific, unsubscribeToken } from "./digest.js";
 import http from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
@@ -15,6 +15,7 @@ const host = process.env.HOST || "0.0.0.0";
 const sessionCookieName = "dap_session";
 const sessionMaxAgeSeconds = 60 * 60 * 24 * 30;
 const sessionSecret = process.env.SESSION_SECRET || "daily-astroph-local-dev-secret";
+configureDigest({ secret: sessionSecret });
 let userStoreWrite = Promise.resolve();
 let postgresPoolPromise;
 let postgresSchemaPromise;
@@ -911,7 +912,7 @@ async function handleAdminDigest(req, res) {
   const mode = digestModes[payload.mode] ? payload.mode : "daily";
 
   try {
-    const digest = await buildDigest(auth.user, mode, todayInPacific().date);
+    const digest = await buildDigest(auth.user, mode, todayInPacific().date, { test: payload.send === true });
     let sentTo = "";
 
     if (payload.send === true) {
@@ -923,7 +924,7 @@ async function handleAdminDigest(req, res) {
         return json(res, 400, { error: `Nothing to send: ${digest.reason}` });
       }
 
-      await sendDigestEmail(auth.user.email, { ...digest.email, subject: `[TEST] ${digest.email.subject}` });
+      await sendDigestEmail(auth.user.email, digest.email);
       sentTo = auth.user.email;
     }
 
@@ -944,6 +945,53 @@ async function handleAdminDigest(req, res) {
 
     return json(res, 502, { error: `Could not build or send the digest: ${error.message}` });
   }
+}
+
+// Unsubscribe link from digest emails (no login needed; the link is signed per user).
+// GET shows a confirmation page with a button, because mail security scanners (e.g. Microsoft Safe Links)
+// open links automatically and must not unsubscribe anyone. POST does the unsubscribe; mail apps send it
+// directly for one-click unsubscribe (RFC 8058).
+function unsubscribePage(title, body) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title}</title><link rel="stylesheet" href="/styles.css"><script src="/theme.js"></script></head>
+<body><main class="app-shell"><section class="topbar" style="max-width:560px;margin:40px auto"><p class="eyebrow">Daily AstroPH</p><h1>${title}</h1>${body}</section></main></body></html>`;
+}
+
+async function handleUnsubscribe(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  const usernameKey = normalizeUsername(url.searchParams.get("u") || "");
+  const token = url.searchParams.get("t") || "";
+  const expected = usernameKey ? unsubscribeToken(usernameKey) : "";
+  const valid = Boolean(expected) && token.length === expected.length && timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+  const send = (status, title, body) => {
+    res.writeHead(status, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+    res.end(unsubscribePage(title, body));
+  };
+
+  if (!valid) {
+    return send(400, "Link not valid", `<p class="profile-help">This unsubscribe link is not valid. You can switch the digest off on your <a href="/profile.html">profile page</a>.</p>`);
+  }
+
+  if (req.method === "GET") {
+    const action = `/api/unsubscribe?u=${encodeURIComponent(usernameKey)}&t=${encodeURIComponent(token)}`;
+    return send(200, "Unsubscribe from the digest?", `<p class="profile-help">This stops the Daily AstroPH email digest for this account. You can switch it on again any time on your profile page.</p>
+<form method="post" action="${action}" style="margin-top:8px"><button class="btn btn-primary" type="submit">Unsubscribe</button> <a class="btn" href="/">Cancel</a></form>`);
+  }
+
+  if (req.method !== "POST") {
+    res.writeHead(405);
+    return res.end();
+  }
+
+  await readJsonBody(req).catch(() => ({}));
+  const store = await readUserStore();
+  const user = store.users.find((entry) => entry.usernameKey === usernameKey);
+
+  if (user && user.digest !== "off") {
+    user.digest = "off";
+    await writeUserStore(store);
+  }
+
+  return send(200, "You're unsubscribed", `<p class="profile-help">You won't receive the Daily AstroPH email digest anymore. To switch it on again, go to your <a href="/profile.html">profile page</a>.</p><p><a class="btn" href="/">Back to Daily AstroPH</a></p>`);
 }
 
 async function handlePassword(req, res) {
@@ -1429,6 +1477,10 @@ const server = http.createServer((req, res) => {
 
   if (req.url?.startsWith("/api/search")) {
     return handleSearch(req, res);
+  }
+
+  if (req.url?.startsWith("/api/unsubscribe")) {
+    return handleUnsubscribe(req, res);
   }
 
   if (req.url?.startsWith("/api/arxiv-status")) {

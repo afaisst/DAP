@@ -93,4 +93,7 @@ APP_URL=https://dap-eret.onrender.com
 requires 2-Step Verification on the account. Personal Gmail accounts can send up to 500 emails per day.
 Keep `DIGEST_ENABLED` unset on local machines so digests are only sent once, from the deployed server.
 
+Optionally set `DIGEST_REPLY_TO` so replies go to a real inbox. `APP_URL` is required for the
+unsubscribe link and the one-click "Unsubscribe" header that mail apps (and spam filters) look for.
+
 Admins can preview their own digest and send a test email to themselves on the Admin page.

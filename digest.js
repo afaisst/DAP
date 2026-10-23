@@ -6,11 +6,13 @@
 //   DIGEST_ENABLED      "true" to send scheduled digests (leave unset locally to avoid duplicate emails)
 //   APP_URL             public address of the site, used for links in the email
 //   DIGEST_FROM_NAME    optional sender name (default "Daily AstroPH")
+//   DIGEST_REPLY_TO     optional address that replies to the digest go to
 //   SMTP_HOST/SMTP_PORT optional, only to use a mail server other than Gmail (default smtp.gmail.com:465)
 //
 // Schedule (US Pacific time): daily digests Monday–Friday at 7 am with the arXiv batch announced the
 // evening before; weekly digests Monday at 7 am with the previous Monday–Friday batches.
 
+import { createHmac } from "node:crypto";
 import nodemailer from "nodemailer";
 import { cachedArxiv } from "./arxiv-client.js";
 import { buildInterestProfile, isDownVote, mostInterestingPapers } from "./public/interests.js";
@@ -20,6 +22,22 @@ const sendHourPacific = 7;
 const checkEveryMs = 5 * 60 * 1000;
 
 let transporter = null;
+let unsubscribeSecret = "daily-astroph-local-dev-secret";
+
+// Called by server.js with the session secret, used to sign unsubscribe links.
+export function configureDigest({ secret }) {
+  if (secret) unsubscribeSecret = secret;
+}
+
+export function unsubscribeToken(usernameKey) {
+  return createHmac("sha256", unsubscribeSecret).update(`unsubscribe:${usernameKey}`).digest("base64url").slice(0, 32);
+}
+
+export function unsubscribeUrl(user) {
+  const appUrl = (process.env.APP_URL || "").replace(/\/$/, "");
+  const key = user.usernameKey || String(user.username || "").toLowerCase();
+  return appUrl ? `${appUrl}/api/unsubscribe?u=${encodeURIComponent(key)}&t=${unsubscribeToken(key)}` : "";
+}
 
 export function smtpConfigured() {
   return Boolean(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
@@ -168,43 +186,51 @@ const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({ "&"
 const shortAuthors = (authors) => (authors.length > 3 ? `${authors.slice(0, 3).join(", ")} et al.` : authors.join(", "));
 const prettyDate = (iso) => new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }).format(utcDay(iso));
 
-export function renderDigestEmail(user, mode, picks, listingDates) {
+// Kept deliberately plain for spam filters: a stable subject, one link per paper, a visible unsubscribe link.
+export function renderDigestEmail(user, mode, picks, listingDates, { test = false } = {}) {
   const appUrl = (process.env.APP_URL || "").replace(/\/$/, "");
-  const period = listingDates.length === 1
-    ? `arXiv listing of ${prettyDate(listingDates[0])}`
-    : `arXiv listings ${prettyDate(listingDates[0])} – ${prettyDate(listingDates[listingDates.length - 1])}`;
-  const subject = `Daily AstroPH ${digestModes[mode].label.toLowerCase()} digest: ${picks.length} papers for you (${period.replace("arXiv listing of ", "").replace("arXiv listings ", "")})`;
+  const first = prettyDate(listingDates[0]);
+  const last = prettyDate(listingDates[listingDates.length - 1]);
+  const periodShort = listingDates.length === 1 ? first : `${first} to ${last}`;
+  const period = listingDates.length === 1 ? `the arXiv listing of ${first}` : `the arXiv listings of ${first} – ${last}`;
+  // Plain ASCII subject (no special dashes or symbols), the same pattern every time.
+  const subject = `Daily AstroPH: your ${mode} digest for ${periodShort}`;
   const greeting = `Hi ${user.fullName ? user.fullName.split(/\s+/)[0] : user.username},`;
-  const intro = `here are the ${picks.length} most interesting astro-ph papers for you from the ${period}, ranked by the papers you gave a thumbs up.`;
-  const footer = [
-    appUrl ? `Open Daily AstroPH: ${appUrl}` : "",
-    `You receive this ${mode} digest because it is switched on in your Daily AstroPH profile${appUrl ? ` (${appUrl}/profile.html)` : ""}. Set it to "Off" there to unsubscribe.`
-  ].filter(Boolean);
+  const intro = `here are the ${picks.length} most interesting astro-ph papers for you from ${period}, ranked by the papers you gave a thumbs up.`;
+  const testNote = test ? "This is a test email sent from the Daily AstroPH admin page." : "";
+  const unsubscribe = unsubscribeUrl(user);
+  const why = `You receive this ${mode} digest because you switched it on in your Daily AstroPH profile.`;
 
   const text = [
+    ...(testNote ? [testNote, ""] : []),
     greeting, "", intro, "",
     ...picks.flatMap((paper, index) => [
       `${index + 1}. ${paper.title}`,
       `   ${shortAuthors(paper.authors)}`,
-      `   ${paper.url}${paper.interestMatches?.length ? `  ·  matches: ${paper.interestMatches.join(", ")}` : ""}`,
+      `   ${paper.url}`,
+      ...(paper.interestMatches?.length ? [`   Matches: ${paper.interestMatches.join(", ")}`] : []),
       ""
     ]),
-    "--", ...footer
+    "--",
+    why,
+    ...(appUrl ? [`Daily AstroPH: ${appUrl}`] : []),
+    ...(unsubscribe ? [`Unsubscribe: ${unsubscribe}`] : [])
   ].join("\n");
 
   const html = `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:#1f2430;max-width:680px">
+${testNote ? `<p style="color:#777"><em>${escapeHtml(testNote)}</em></p>` : ""}
 <p>${escapeHtml(greeting)}</p><p>${escapeHtml(intro)}</p>
-<ol style="padding-left:22px">${picks.map((paper) => `<li style="margin-bottom:14px"><a href="${escapeHtml(paper.url)}" style="color:#3343bd;font-weight:600;text-decoration:none">${escapeHtml(paper.title)}</a><br><span style="color:#555">${escapeHtml(shortAuthors(paper.authors))}</span>${paper.interestMatches?.length ? `<br><span style="color:#2563eb;font-size:13px">Matches: ${escapeHtml(paper.interestMatches.join(", "))}</span>` : ""}</li>`).join("")}</ol>
-<p style="color:#777;font-size:13px;border-top:1px solid #ddd;padding-top:10px">${footer.map((line) => escapeHtml(line)).join("<br>")}</p></div>`;
+<ol style="padding-left:22px">${picks.map((paper) => `<li style="margin-bottom:14px"><a href="${escapeHtml(paper.url)}" style="color:#3343bd;font-weight:600;text-decoration:none">${escapeHtml(paper.title)}</a><br><span style="color:#555">${escapeHtml(shortAuthors(paper.authors))}</span>${paper.interestMatches?.length ? `<br><span style="color:#666;font-size:13px">Matches: ${escapeHtml(paper.interestMatches.join(", "))}</span>` : ""}</li>`).join("")}</ol>
+<p style="color:#777;font-size:13px;border-top:1px solid #ddd;padding-top:10px">${escapeHtml(why)}${appUrl ? `<br><a href="${escapeHtml(appUrl)}" style="color:#777">Daily AstroPH</a>` : ""}${unsubscribe ? ` · <a href="${escapeHtml(unsubscribe)}" style="color:#777">Unsubscribe</a>` : ""}</p></div>`;
 
-  return { subject, text, html };
+  return { subject, text, html, unsubscribe };
 }
 
-export async function buildDigest(user, mode, todayPacific) {
+export async function buildDigest(user, mode, todayPacific, options = {}) {
   const listingDates = digestListingDates(mode, todayPacific);
   const papers = await fetchPapersForListingDates(listingDates);
   const { picks, reason } = pickDigestPapers(user, mode, papers);
-  return { listingDates, candidateCount: papers.length, picks, reason, email: picks.length ? renderDigestEmail(user, mode, picks, listingDates) : null };
+  return { listingDates, candidateCount: papers.length, picks, reason, email: picks.length ? renderDigestEmail(user, mode, picks, listingDates, options) : null };
 }
 
 export async function sendDigestEmail(to, email) {
@@ -215,9 +241,15 @@ export async function sendDigestEmail(to, email) {
   return getTransporter().sendMail({
     from: { name: process.env.DIGEST_FROM_NAME || "Daily AstroPH", address: process.env.GMAIL_USER },
     to,
+    replyTo: process.env.DIGEST_REPLY_TO || undefined,
     subject: email.subject,
     text: email.text,
-    html: email.html
+    html: email.html,
+    // One-click unsubscribe (RFC 8058): mail apps show an "Unsubscribe" button, and Microsoft/Google expect it.
+    list: email.unsubscribe
+      ? { unsubscribe: { url: email.unsubscribe, comment: "Unsubscribe from the Daily AstroPH digest" } }
+      : undefined,
+    headers: email.unsubscribe ? { "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } : undefined
   });
 }
 
