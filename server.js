@@ -225,6 +225,7 @@ async function ensurePostgresSchema() {
         email TEXT NOT NULL DEFAULT '',
         digest TEXT NOT NULL DEFAULT 'off',
         digest_last_sent JSONB NOT NULL DEFAULT '{}'::jsonb,
+        hide_authors BOOLEAN NOT NULL DEFAULT FALSE,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `).then(() => pool.query(`
@@ -234,7 +235,8 @@ async function ensurePostgresSchema() {
         ADD COLUMN IF NOT EXISTS liked JSONB NOT NULL DEFAULT '[]'::jsonb,
         ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT '',
         ADD COLUMN IF NOT EXISTS digest TEXT NOT NULL DEFAULT 'off',
-        ADD COLUMN IF NOT EXISTS digest_last_sent JSONB NOT NULL DEFAULT '{}'::jsonb
+        ADD COLUMN IF NOT EXISTS digest_last_sent JSONB NOT NULL DEFAULT '{}'::jsonb,
+        ADD COLUMN IF NOT EXISTS hide_authors BOOLEAN NOT NULL DEFAULT FALSE
     `)));
   }
 
@@ -257,6 +259,7 @@ function rowToUser(row) {
     email: row.email || "",
     digest: row.digest || "off",
     digestLastSent: row.digest_last_sent && typeof row.digest_last_sent === "object" ? row.digest_last_sent : {},
+    hideAuthors: Boolean(row.hide_authors),
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
   };
 }
@@ -303,9 +306,10 @@ async function writePostgresUserStore(store) {
             email,
             digest,
             digest_last_sent,
+            hide_authors,
             created_at
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12, $13, $14::jsonb, COALESCE($15::timestamptz, NOW()))
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12, $13, $14::jsonb, $15, COALESCE($16::timestamptz, NOW()))
           ON CONFLICT (username_key) DO UPDATE SET
             username = EXCLUDED.username,
             password_salt = EXCLUDED.password_salt,
@@ -319,7 +323,8 @@ async function writePostgresUserStore(store) {
             liked = EXCLUDED.liked,
             email = EXCLUDED.email,
             digest = EXCLUDED.digest,
-            digest_last_sent = EXCLUDED.digest_last_sent
+            digest_last_sent = EXCLUDED.digest_last_sent,
+            hide_authors = EXCLUDED.hide_authors
         `, [
           user.username,
           user.usernameKey,
@@ -335,6 +340,7 @@ async function writePostgresUserStore(store) {
           user.email || "",
           user.digest || "off",
           JSON.stringify(user.digestLastSent && typeof user.digestLastSent === "object" ? user.digestLastSent : {}),
+          Boolean(user.hideAuthors),
           user.createdAt || null
         ]);
       }
@@ -406,6 +412,7 @@ function serializeUser(user) {
     nameAliases: sanitizeNameAliases(user.nameAliases),
     email: user.email || "",
     digest: digestModes[user.digest] ? user.digest : "off",
+    hideAuthors: Boolean(user.hideAuthors),
     isAdmin: isAdminUser(user)
   };
 }
@@ -654,6 +661,11 @@ async function handleProfile(req, res) {
   auth.user.fullName = fullName;
   auth.user.orcid = orcid;
   auth.user.nameAliases = nameAliases;
+
+  if ("hideAuthors" in payload) {
+    auth.user.hideAuthors = payload.hideAuthors === true;
+  }
+
   await writeUserStore(auth.store);
   return json(res, 200, { user: serializeUser(auth.user) });
 }

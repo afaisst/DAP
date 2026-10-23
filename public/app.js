@@ -699,7 +699,7 @@ function renderPaper(paper) {
   bibtexButton.addEventListener("click", () => openBibtexModal(paper, libraryMenu));
   figuresButton.addEventListener("click", () => openFigureModal(paper));
   summaryButton.addEventListener("click", () => openSummaryModal(paper));
-  renderAuthors(authors, paper.authors);
+  renderAuthors(authors, paper.authors, paper);
 
   return node;
 }
@@ -1923,8 +1923,28 @@ function typesetMath(root) {
   });
 }
 
-function renderAuthors(container, authors) {
+// Papers whose authors the user revealed (when "Hide author names by default" is on in the profile).
+const revealedAuthorPapers = new Set();
+
+function renderAuthors(container, authors, paper) {
   container.textContent = "";
+  const key = paper ? favoriteKey(paper) : "";
+
+  if (state.sessionUser?.hideAuthors && authors.length && key && !revealedAuthorPapers.has(key)) {
+    const hidden = document.createElement("span");
+    hidden.className = "authors-hidden";
+    hidden.textContent = `Authors hidden (${authors.length})`;
+    const reveal = document.createElement("button");
+    reveal.type = "button";
+    reveal.className = "author-toggle reveal-authors-button";
+    reveal.textContent = "Reveal authors";
+    reveal.addEventListener("click", () => {
+      revealedAuthorPapers.add(key);
+      renderAuthors(container, authors, paper);
+    });
+    container.append(hidden, reveal);
+    return;
+  }
 
   if (!authors.length) {
     container.textContent = "No authors listed";

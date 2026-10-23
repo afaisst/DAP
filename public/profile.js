@@ -10,6 +10,7 @@ const orcidInput = $("#orcidInput");
 const nameAliasesList = $("#nameAliasesList");
 const addNameAliasButton = $("#addNameAliasButton");
 const digestEmailInput = $("#digestEmailInput");
+const hideAuthorsInput = $("#hideAuthorsInput");
 const digestHint = $("#digestHint");
 const saveProfileButton = $("#saveProfileButton");
 const profileSaveStatus = $("#profileSaveStatus");
@@ -89,6 +90,7 @@ function fillProfileForm(user) {
   orcidInput.value = user.orcid || "";
   renderNameAliases(user.nameAliases || []);
   digestEmailInput.value = user.email || "";
+  hideAuthorsInput.checked = Boolean(user.hideAuthors);
   const mode = ["off", "daily", "weekly"].includes(user.digest) ? user.digest : "off";
   $(`input[name="digestMode"][value="${mode}"]`).checked = true;
   savedProfileSnapshot = profileSnapshot();
@@ -102,7 +104,8 @@ function collectProfile() {
     orcid: orcidInput.value.trim(),
     nameAliases: getNameAliases(),
     email: digestEmailInput.value.trim(),
-    digest: selectedDigestMode()
+    digest: selectedDigestMode(),
+    hideAuthors: hideAuthorsInput.checked
   };
 }
 

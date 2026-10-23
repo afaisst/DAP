@@ -1589,3 +1589,10 @@ kbd {
   .profile-two-col, .profile-three-col { grid-template-columns: 1fr; }
   .profile-footer .save-status { flex-basis: 100%; order: 3; margin-left: 0; text-align: left; }
 }
+
+/* ===== Hidden authors ===== */
+.authors-hidden { color: var(--muted); font-style: italic; }
+.reveal-authors-button { margin-left: 8px; padding: 0 10px; }
+.profile-check { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.profile-check input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); flex: none; }
+.profile-check .profile-help { font-weight: 400; }
