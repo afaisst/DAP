@@ -40,6 +40,26 @@
         <pre id="digestPreview" class="admin-digest-preview" hidden></pre>
       </section>
 
+      <section id="adminArxiv" class="profile-card admin-arxiv" hidden>
+        <div class="admin-arxiv-head">
+          <h2>arXiv requests</h2>
+          <div class="range-switch" role="group" aria-label="Time range">
+            <button type="button" class="btn btn-small" data-range="2">2 days</button>
+            <button type="button" class="btn btn-small" data-range="7">7 days</button>
+            <button type="button" class="btn btn-small" data-range="14">14 days</button>
+          </div>
+        </div>
+        <p class="profile-help">How often the server asked arXiv for data, per hour (your local time). arXiv asks for at most one request every 3 seconds; repeated requests are answered from the server's memory instead. Statistics are kept for 14 days.</p>
+        <div id="arxivTiles" class="stat-tiles"></div>
+        <div id="arxivChart" class="arxiv-chart" role="img" aria-label="Requests to arXiv per hour"></div>
+        <div id="arxivTooltip" class="chart-tooltip" hidden></div>
+        <p class="chart-legend"><span class="legend-bar"></span> requests sent to arXiv per hour <span class="legend-dot"></span> hour in which arXiv answered "too many requests"</p>
+        <details class="arxiv-table-wrap">
+          <summary>Daily table</summary>
+          <div class="table-scroll"><table id="arxivTable" class="arxiv-table"></table></div>
+        </details>
+      </section>
+
       <section id="adminUsers" class="admin-users" aria-live="polite"></section>
     </main>
 

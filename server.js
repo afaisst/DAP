@@ -1,4 +1,5 @@
 import { ArxivBusyError, arxivStatus, cachedArxiv } from "./arxiv-client.js";
+import { arxivStatsSnapshot, startArxivStatsPersistence } from "./arxiv-stats.js";
 import { buildDigest, configureDigest, digestModes, schedulerEnabled, sendDigestEmail, smtpConfigured, startDigestScheduler, todayInPacific, unsubscribeToken } from "./digest.js";
 import http from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -10,6 +11,7 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const publicDir = join(__dirname, "public");
 const dataDir = join(__dirname, "data");
 const usersFile = join(dataDir, "users.json");
+const arxivStatsFile = join(dataDir, "arxiv-stats.json");
 const port = Number(process.env.PORT || 4180);
 const host = process.env.HOST || "0.0.0.0";
 const sessionCookieName = "dap_session";
@@ -127,6 +129,10 @@ function deleteSession() {
 function normalizeUsername(value) {
   return value.trim().toLowerCase();
 }
+
+// Per-user limits (keep the free Neon database small). The app shows a message when one is reached.
+const maxFavorites = 200;
+const maxSuggestions = 200;
 
 const adminUsernames = new Set(
   (process.env.ADMIN_USERS || "afaisst")
@@ -270,13 +276,70 @@ function rowToUser(row) {
   };
 }
 
+// Small key/value table for app data that isn't per user (currently: arXiv request statistics).
+async function ensurePostgresKvTable() {
+  await ensurePostgresSchema();
+  const pool = await getPostgresPool();
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS dap_kv (
+      key TEXT PRIMARY KEY,
+      value JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  return pool;
+}
+
+async function loadArxivStats() {
+  if (process.env.DATABASE_URL) {
+    const pool = await ensurePostgresKvTable();
+    const result = await pool.query("SELECT value FROM dap_kv WHERE key = 'arxiv_stats'");
+    return result.rows[0]?.value || {};
+  }
+
+  try {
+    return JSON.parse(await readFile(arxivStatsFile, "utf-8"));
+  } catch {
+    return {};
+  }
+}
+
+async function saveArxivStats(buckets) {
+  if (process.env.DATABASE_URL) {
+    const pool = await ensurePostgresKvTable();
+    await pool.query(
+      `INSERT INTO dap_kv (key, value, updated_at) VALUES ('arxiv_stats', $1::jsonb, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      [JSON.stringify(buckets)]
+    );
+    return;
+  }
+
+  await mkdir(dataDir, { recursive: true });
+  await writeFile(arxivStatsFile, JSON.stringify(buckets), "utf-8");
+}
+
+async function handleAdminArxivStats(req, res) {
+  const auth = await getUserFromSession(req, res);
+
+  if (!auth || !ensureAdmin(req, res, auth)) {
+    return;
+  }
+
+  return json(res, 200, { hours: arxivStatsSnapshot(), status: arxivStatus() });
+}
+
 async function readPostgresUserStore() {
   await ensurePostgresSchema();
   const pool = await getPostgresPool();
   const result = await pool.query("SELECT * FROM dap_users ORDER BY created_at ASC");
-  return {
-    users: result.rows.map(rowToUser)
-  };
+  const store = { users: result.rows.map(rowToUser) };
+  // Remember each user as loaded, so writes only touch users that actually changed.
+  Object.defineProperty(store, "loadedSnapshot", {
+    value: new Map(store.users.map((user) => [user.usernameKey, JSON.stringify(user)])),
+    enumerable: false
+  });
+  return store;
 }
 
 async function writePostgresUserStore(store) {
@@ -287,15 +350,20 @@ async function writePostgresUserStore(store) {
 
     try {
       await client.query("BEGIN");
-      const usernameKeys = store.users.map((user) => user.usernameKey);
+      // Only write what changed since this store was read: deleted accounts and modified users.
+      // (Rewriting every user on each click wastes database space and could overwrite other users'
+      // changes made in the meantime.)
+      const snapshot = store.loadedSnapshot || new Map();
+      const currentKeys = new Set(store.users.map((user) => user.usernameKey));
+      const removedKeys = [...snapshot.keys()].filter((key) => !currentKeys.has(key));
 
-      if (usernameKeys.length) {
-        await client.query("DELETE FROM dap_users WHERE NOT (username_key = ANY($1::text[]))", [usernameKeys]);
-      } else {
-        await client.query("DELETE FROM dap_users");
+      if (removedKeys.length) {
+        await client.query("DELETE FROM dap_users WHERE username_key = ANY($1::text[])", [removedKeys]);
       }
 
-      for (const user of store.users) {
+      const changedUsers = store.users.filter((user) => snapshot.get(user.usernameKey) !== JSON.stringify(user));
+
+      for (const user of changedUsers) {
         await client.query(`
           INSERT INTO dap_users (
             username,
@@ -352,6 +420,11 @@ async function writePostgresUserStore(store) {
       }
 
       await client.query("COMMIT");
+
+      if (store.loadedSnapshot) {
+        removedKeys.forEach((key) => store.loadedSnapshot.delete(key));
+        changedUsers.forEach((user) => store.loadedSnapshot.set(user.usernameKey, JSON.stringify(user)));
+      }
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -421,6 +494,7 @@ function serializeUser(user) {
     hideAuthors: Boolean(user.hideAuthors),
     isAdmin: isAdminUser(user),
     isOwner: isOwnerUser(user),
+    limits: { favorites: maxFavorites, suggestions: maxSuggestions },
     coAdmin: !isOwnerUser(user) && Boolean(user.coAdmin)
   };
 }
@@ -617,10 +691,19 @@ async function handleFavorites(req, res) {
       return json(res, 400, { error: "Expected a favorites array." });
     }
 
-    user.favorites = payload.favorites
-      .map(sanitizeFavoritePaper)
-      .filter(Boolean)
-      .slice(0, 500);
+    const favorites = payload.favorites.map(sanitizeFavoritePaper).filter(Boolean);
+    const previousCount = Array.isArray(user.favorites) ? user.favorites.length : 0;
+
+    // Accounts already above the limit (older cap was 500) may still remove favorites, but not add.
+    if (favorites.length > maxFavorites && favorites.length > previousCount) {
+      return json(res, 409, {
+        error: `You have reached the limit of ${maxFavorites} favorites.`,
+        limit: maxFavorites,
+        code: "favorites_limit"
+      });
+    }
+
+    user.favorites = favorites;
     await writeUserStore(store);
     return json(res, 200, { favorites: user.favorites });
   }
@@ -777,10 +860,17 @@ async function handleSuggestions(req, res) {
   }
 
   const existing = Array.isArray(recipient.suggestions) ? recipient.suggestions : [];
-  recipient.suggestions = [
-    suggestion,
-    ...existing.filter((entry) => !(entry?.id === suggestion.id && normalizeUsername(entry?.suggestedBy?.username || "") === auth.user.usernameKey))
-  ].slice(0, 500);
+  const others = existing.filter((entry) => !(entry?.id === suggestion.id && normalizeUsername(entry?.suggestedBy?.username || "") === auth.user.usernameKey));
+
+  if (others.length >= maxSuggestions) {
+    const name = recipient.fullName || recipient.username;
+    return json(res, 409, {
+      error: `${name}'s Suggested Papers list is full (${maxSuggestions} papers), so this suggestion can't be added. They need to make room first.`,
+      code: "suggestions_limit"
+    });
+  }
+
+  recipient.suggestions = [suggestion, ...others];
   await writeUserStore(auth.store);
   return json(res, 200, { ok: true });
 }
@@ -1485,6 +1575,10 @@ async function handleAuth(req, res) {
     return handleAdminDigest(req, res);
   }
 
+  if (url.pathname === "/api/admin/arxiv-stats") {
+    return handleAdminArxivStats(req, res);
+  }
+
   if (url.pathname === "/api/password") {
     return handlePassword(req, res);
   }
@@ -1559,6 +1653,7 @@ const server = http.createServer((req, res) => {
     || req.url?.startsWith("/api/likes")
     || req.url?.startsWith("/api/digest-settings")
     || req.url?.startsWith("/api/admin/digest")
+    || req.url?.startsWith("/api/admin/arxiv-stats")
     || req.url?.startsWith("/api/password")
     || req.url?.startsWith("/api/account")
     || req.url?.startsWith("/api/admin/users")) {
@@ -1571,4 +1666,5 @@ const server = http.createServer((req, res) => {
 server.listen(port, host, () => {
   console.log(`DailyAstroPH running at http://${host}:${port}`);
   startDigestScheduler({ readUserStore, writeUserStore });
+  startArxivStatsPersistence({ load: loadArxivStats, save: saveArxivStats });
 });

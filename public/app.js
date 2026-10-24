@@ -693,7 +693,7 @@ function renderPaper(paper) {
     dismissSuggestionButton.addEventListener("click", () => dismissSuggestion(paper, dismissSuggestionButton));
   }
   copyButton.addEventListener("click", () => copyPaperLink(copyButton, paper.url, shareMenu));
-  suggestButton.addEventListener("click", () => openSuggestModal(paper, shareMenu));
+  suggestButton.addEventListener("click", () => openSuggestModal(paper));
   setShareLinks(paper, { emailShareLink, xShareLink, facebookShareLink, linkedinShareLink });
   setLibraryLinks(paper, { zoteroLibraryLink, papersLibraryLink, adsBibtexLink, bentyVoteLink });
   bibtexButton.addEventListener("click", () => openBibtexModal(paper, libraryMenu));
@@ -846,6 +846,71 @@ async function loadSuggestions() {
   }
 
   state.suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
+
+  if (state.suggestions.length >= suggestionsLimit() && !suggestionsNoticeShown) {
+    suggestionsNoticeShown = true;
+    window.setTimeout(showSuggestionsFull, 0);
+  }
+}
+
+// ===== Limits (favorites / suggested papers) =====
+let suggestionsNoticeShown = false;
+
+function favoritesLimit() {
+  return state.sessionUser?.limits?.favorites || 200;
+}
+
+function suggestionsLimit() {
+  return state.sessionUser?.limits?.suggestions || 200;
+}
+
+function showLimitModal({ title, text, tips, topicId }) {
+  const modal = document.querySelector("#limitModal");
+  document.querySelector("#limitModalTitle").textContent = title;
+  document.querySelector("#limitModalText").textContent = text;
+  const list = document.querySelector("#limitModalTips");
+  list.innerHTML = "";
+  tips.forEach((tip) => {
+    const item = document.createElement("li");
+    item.innerHTML = tip;
+    list.appendChild(item);
+  });
+  modal.returnValue = "";
+  modal.addEventListener("close", () => {
+    if (modal.returnValue === "show") {
+      state.activeTopicId = topicId;
+      render();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, { once: true });
+
+  if (!modal.open) {
+    modal.showModal();
+  }
+}
+
+function showFavoritesLimit(extra = "") {
+  showLimitModal({
+    title: `You've reached ${favoritesLimit()} favorites`,
+    text: `${extra ? `${extra} ` : ""}Favorites are limited to ${favoritesLimit()} papers. To add new ones, remove some first.`,
+    tips: [
+      "Keep papers for good in your own reference manager: on each card use <strong>Library → Add to Zotero</strong>, <strong>Open for Papers/ReadCube</strong> or <strong>Show BibTeX</strong>.",
+      "Then click the gold <strong>★</strong> to remove them from your favorites."
+    ],
+    topicId: favoriteTopic.id
+  });
+}
+
+function showSuggestionsFull() {
+  showLimitModal({
+    title: "Your Suggested Papers list is full",
+    text: `You have ${state.suggestions.length} suggested papers (the limit is ${suggestionsLimit()}), so colleagues can't suggest new papers to you until you make room.`,
+    tips: [
+      "To keep a suggested paper, click its <strong>☆</strong> to move it to your Favorites, then remove the suggestion with the red <strong>trash bin</strong>.",
+      "Remove suggestions you don't need with the <strong>trash bin</strong>."
+    ],
+    topicId: suggestedTopic.id
+  });
 }
 
 async function loadRemoteFavorites(mergeLocal = false) {
@@ -858,7 +923,16 @@ async function loadRemoteFavorites(mergeLocal = false) {
 
   const remoteFavorites = Array.isArray(data.favorites) ? data.favorites : [];
   const localFavorites = mergeLocal ? loadLocalFavorites() : [];
-  const mergedFavorites = mergeFavorites(remoteFavorites, localFavorites);
+  let mergedFavorites = mergeFavorites(remoteFavorites, localFavorites);
+  const room = Math.max(favoritesLimit(), remoteFavorites.length);
+
+  if (mergedFavorites.length > room) {
+    // Favorites saved in this browser before logging in don't all fit into the account.
+    const skipped = mergedFavorites.length - room;
+    mergedFavorites = mergedFavorites.slice(0, room);
+    window.setTimeout(() => showFavoritesLimit(`${skipped} ${skipped === 1 ? "favorite" : "favorites"} saved in this browser could not be added to your account.`), 0);
+  }
+
   state.favorites = mergedFavorites;
 
   if (mergedFavorites.length !== remoteFavorites.length) {
@@ -877,7 +951,9 @@ async function saveRemoteFavorites(favorites = state.favorites) {
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error || "Could not save account favorites.");
+    const error = new Error(data.error || "Could not save account favorites.");
+    error.code = data.code;
+    throw error;
   }
 
   state.favorites = Array.isArray(data.favorites) ? data.favorites : favorites;
@@ -903,8 +979,21 @@ function mergeFavorites(primaryFavorites, secondaryFavorites) {
   return merged;
 }
 
+// Stored papers (favorites, suggestions) may miss fields; fill them so rendering never breaks.
+function completePaper(paper) {
+  return {
+    ...paper,
+    title: paper.title || paper.id || "Untitled",
+    abstract: paper.abstract || "",
+    published: paper.published || "",
+    authors: Array.isArray(paper.authors) ? paper.authors : [],
+    categories: Array.isArray(paper.categories) ? paper.categories : [],
+    url: paper.url || paper.id || ""
+  };
+}
+
 function getFavoritePapers() {
-  return [...state.favorites].sort((a, b) => new Date(b.favoritedAt || b.published) - new Date(a.favoritedAt || a.published));
+  return state.favorites.map(completePaper).sort((a, b) => new Date(b.favoritedAt || b.published) - new Date(a.favoritedAt || a.published));
 }
 
 async function loadLikes() {
@@ -936,9 +1025,7 @@ function updateVoteButtons(likeButton, dislikeButton, paper) {
 
 async function setVote(paper, vote) {
   if (!state.sessionUser) {
-    accountMenu.open = true;
-    authStatus.textContent = "Log in to teach Daily AstroPH which papers you like.";
-    usernameInput.focus();
+    promptLogin("Log in to teach Daily AstroPH which papers you like.");
     return;
   }
 
@@ -1289,7 +1376,8 @@ async function dismissSuggestion(paper, button) {
 }
 
 function getSuggestedPapers() {
-  return [...state.suggestions]
+  return state.suggestions
+    .map(completePaper)
     .map((paper) => ({
       ...paper,
       topic: paper.topic || fallbackTopic,
@@ -1318,6 +1406,9 @@ async function toggleFavorite(paper) {
 
   if (isFavorite(paper)) {
     state.favorites = state.favorites.filter((favorite) => favoriteKey(favorite) !== key);
+  } else if (state.favorites.length >= favoritesLimit()) {
+    showFavoritesLimit();
+    return;
   } else {
     state.favorites = [toFavoritePaper(paper), ...state.favorites];
   }
@@ -1333,7 +1424,12 @@ async function toggleFavorite(paper) {
   } catch (error) {
     state.favorites = previousFavorites;
     render();
-    setStatus(error.message);
+
+    if (error.code === "favorites_limit") {
+      showFavoritesLimit();
+    } else {
+      setStatus(error.message);
+    }
   }
 }
 
@@ -1482,10 +1578,19 @@ function openSummaryModal(paper) {
   typesetMath(summaryModal);
 }
 
-function openSuggestModal(paper, shareMenu) {
+// Opens the login box with a hint. Deferred, so the click that triggered it doesn't immediately close the
+// menu again (open menus close on clicks elsewhere on the page).
+function promptLogin(message) {
+  window.setTimeout(() => {
+    accountMenu.open = true;
+    authStatus.textContent = message;
+    usernameInput.focus();
+  }, 0);
+}
+
+function openSuggestModal(paper) {
   if (!state.sessionUser) {
-    authStatus.textContent = "Log in to suggest papers to other users.";
-    shareMenu.open = false;
+    promptLogin("Log in to suggest papers to colleagues.");
     return;
   }
 
@@ -1496,7 +1601,6 @@ function openSuggestModal(paper, shareMenu) {
   suggestUserResults.innerHTML = "";
   suggestStatus.textContent = "";
   suggestSendButton.disabled = true;
-  shareMenu.open = false;
   suggestModal.showModal();
   suggestUserInput.focus();
 }

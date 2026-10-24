@@ -1,3 +1,5 @@
+import { recordArxivEvent } from "./arxiv-stats.js";
+
 // All traffic to arXiv goes through here.
 //
 // 1. Throttle: at most one arXiv request every 3 seconds, across all users of this server
@@ -32,21 +34,23 @@ export class ArxivBusyError extends Error {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function assertNotBlocked() {
+function assertNotBlocked(kind) {
   const remaining = blockedUntil - Date.now();
 
   if (remaining > 0) {
+    recordArxivEvent("refused", kind);
     throw new ArxivBusyError(remaining / 1000);
   }
 }
 
-export async function throttledFetch(url, userAgent) {
-  assertNotBlocked();
+export async function throttledFetch(url, userAgent, kind = "papers") {
+  assertNotBlocked(kind);
 
   const now = Date.now();
   const slot = Math.max(now, nextSlot);
 
   if (slot - now > maxQueueWaitMs) {
+    recordArxivEvent("refused", kind);
     throw new ArxivBusyError((slot - now) / 1000);
   }
 
@@ -54,12 +58,14 @@ export async function throttledFetch(url, userAgent) {
 
   if (slot > now) {
     await sleep(slot - now);
-    assertNotBlocked();
+    assertNotBlocked(kind);
   }
 
+  recordArxivEvent("sent", kind);
   const response = await fetch(url, { headers: { "user-agent": userAgent } });
 
   if (response.status === 429 || response.status === 503) {
+    recordArxivEvent("limited", kind);
     const retryAfter = Number(response.headers.get("retry-after"));
     const fallback = response.status === 429 ? cooldownAfter429Ms : cooldownAfter503Ms;
     const pauseMs = Math.max(fallback, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 0);
@@ -105,23 +111,29 @@ function store(key, value, ttlMs) {
 export async function cachedArxiv(key, ttlMs, loader) {
   const entry = cache.get(key);
 
+  const kind = key.split(":")[0];
+
   if (entry && entry.expiresAt > Date.now()) {
+    recordArxivEvent("cached", kind);
     cache.delete(key);
     cache.set(key, entry);
     return { value: entry.value, source: "memory" };
   }
 
   if (inflight.has(key)) {
+    // Someone else is already fetching the same thing: share their request.
+    recordArxivEvent("cached", kind);
     return inflight.get(key);
   }
 
   const request = (async () => {
     try {
-      const value = await loader(throttledFetch);
+      const value = await loader((url, userAgent) => throttledFetch(url, userAgent, kind));
       store(key, value, ttlMs);
       return { value, source: "arxiv" };
     } catch (error) {
       if (entry) {
+        recordArxivEvent("cached", kind);
         return { value: entry.value, source: "stale" };
       }
 

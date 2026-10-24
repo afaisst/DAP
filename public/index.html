@@ -162,7 +162,6 @@
               <a class="x-share-link" target="_blank" rel="noreferrer">X</a>
               <a class="facebook-share-link" target="_blank" rel="noreferrer">Facebook</a>
               <a class="linkedin-share-link" target="_blank" rel="noreferrer">LinkedIn</a>
-              <button class="suggest-button" type="button">Suggest to a colleague</button>
             </div>
           </details>
           <details class="library-menu">
@@ -181,6 +180,10 @@
             <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M6.5 10.5V3.2a.7.7 0 0 1 .7-.7h5.6a.7.7 0 0 1 .7.7v7.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.3 6.4l1.2 1.2 2.3-2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 10.5h14v6a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 16.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M7 14h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
             Vote on Benty
           </a>
+          <button class="suggest-button action-btn" type="button" title="Suggest this paper to a colleague on Daily AstroPH">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></svg>
+            Suggest
+          </button>
         </div>
       </article>
     </template>
@@ -303,6 +306,23 @@
         <div class="confirm-actions">
           <button id="searchResetButton" class="btn" type="button">Clear fields</button>
           <button id="searchSubmitButton" class="btn btn-primary" type="submit">Search arXiv</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="limitModal" class="confirm-modal" aria-labelledby="limitModalTitle">
+      <form method="dialog" class="confirm-modal-shell">
+        <div class="confirm-icon limit-icon" aria-hidden="true">
+          <svg viewBox="0 0 20 20" width="22" height="22"><circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M10 6v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="14" r="1" fill="currentColor"/></svg>
+        </div>
+        <div class="confirm-text">
+          <h2 id="limitModalTitle">Limit reached</h2>
+          <p id="limitModalText"></p>
+          <ul id="limitModalTips" class="limit-tips"></ul>
+        </div>
+        <div class="confirm-actions">
+          <button value="close" class="btn" type="submit">OK</button>
+          <button id="limitModalShow" value="show" class="btn btn-primary" type="submit">Show list</button>
         </div>
       </form>
     </dialog>

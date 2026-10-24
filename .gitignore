@@ -5,3 +5,6 @@ npm-debug.log*
 # Screenshots and files produced by Claude
 Claude outputs/
 Claude Output/
+
+# Local arXiv request statistics (on Render they are stored in Postgres)
+data/arxiv-stats.json
