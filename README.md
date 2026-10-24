@@ -49,6 +49,10 @@ SESSION_SECRET=replace-with-a-long-random-string
 ADMIN_USERS=afaisst
 ```
 
+`ADMIN_USERS` lists the main admin account(s). On the Admin page, a main admin can tick "Co-admin" on any
+member to give them admin rights. Co-admins can use the whole Admin page but cannot add or remove
+co-admins, and cannot delete main-admin or co-admin accounts.
+
 For a local Postgres server without SSL, also set:
 
 ```text

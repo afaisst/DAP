@@ -135,8 +135,14 @@ const adminUsernames = new Set(
     .filter(Boolean)
 );
 
-function isAdminUser(user) {
+// Main admin(s): the accounts listed in ADMIN_USERS. They can make other users co-admins.
+function isOwnerUser(user) {
   return adminUsernames.has(normalizeUsername(user?.username || ""));
+}
+
+// Co-admins have the same admin rights, except managing co-admins and touching main/co-admin accounts.
+function isAdminUser(user) {
+  return isOwnerUser(user) || Boolean(user?.coAdmin);
 }
 
 function hashPassword(password, salt) {
@@ -251,7 +257,7 @@ function rowToUser(row) {
     passwordHash: row.password_hash,
     fullName: row.full_name || "",
     orcid: row.orcid || "",
-    isAdmin: Boolean(row.is_admin),
+    coAdmin: Boolean(row.is_admin),
     favorites: Array.isArray(row.favorites) ? row.favorites : [],
     nameAliases: Array.isArray(row.name_aliases) ? row.name_aliases : [],
     suggestions: Array.isArray(row.suggestions) ? row.suggestions : [],
@@ -332,7 +338,7 @@ async function writePostgresUserStore(store) {
           user.passwordHash,
           user.fullName || "",
           user.orcid || "",
-          Boolean(user.isAdmin),
+          Boolean(user.coAdmin),
           JSON.stringify(Array.isArray(user.favorites) ? user.favorites : []),
           JSON.stringify(Array.isArray(user.nameAliases) ? user.nameAliases : []),
           JSON.stringify(Array.isArray(user.suggestions) ? user.suggestions : []),
@@ -413,7 +419,9 @@ function serializeUser(user) {
     email: user.email || "",
     digest: digestModes[user.digest] ? user.digest : "off",
     hideAuthors: Boolean(user.hideAuthors),
-    isAdmin: isAdminUser(user)
+    isAdmin: isAdminUser(user),
+    isOwner: isOwnerUser(user),
+    coAdmin: !isOwnerUser(user) && Boolean(user.coAdmin)
   };
 }
 
@@ -1103,10 +1111,47 @@ async function handleAdminUsers(req, res) {
       return json(res, 404, { error: "That account does not exist." });
     }
 
+    if (isOwnerUser(targetUser)) {
+      return json(res, 403, { error: "The main admin account cannot be deleted here." });
+    }
+
+    if (targetUser.coAdmin && !isOwnerUser(auth.user)) {
+      return json(res, 403, { error: "Only the main admin can delete a co-admin account." });
+    }
+
     auth.store.users = auth.store.users.filter((user) => user.usernameKey !== usernameKey);
     await writeUserStore(auth.store);
     deleteSessionsForUsername(targetUser.username);
     return json(res, 200, { ok: true });
+  }
+
+  // Make a user co-admin or remove it: { coAdmin: true | false }. Main admin only.
+  if (req.method === "PUT" && usernameParam) {
+    if (!isOwnerUser(auth.user)) {
+      return json(res, 403, { error: "Only the main admin can add or remove co-admins." });
+    }
+
+    const targetUser = auth.store.users.find((user) => user.usernameKey === normalizeUsername(usernameParam));
+
+    if (!targetUser) {
+      return json(res, 404, { error: "That account does not exist." });
+    }
+
+    if (isOwnerUser(targetUser)) {
+      return json(res, 400, { error: "The main admin account cannot be changed." });
+    }
+
+    let payload;
+
+    try {
+      payload = await readJsonBody(req);
+    } catch {
+      return json(res, 400, { error: "Invalid JSON body." });
+    }
+
+    targetUser.coAdmin = payload.coAdmin === true;
+    await writeUserStore(auth.store);
+    return json(res, 200, { user: serializeUser(targetUser) });
   }
 
   return json(res, 405, { error: "Method not allowed." });

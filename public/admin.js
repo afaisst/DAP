@@ -1,5 +1,6 @@
 const adminStatus = document.querySelector("#adminStatus");
 const adminUsers = document.querySelector("#adminUsers");
+let viewer = null;
 
 init();
 
@@ -17,6 +18,8 @@ async function init() {
       adminStatus.textContent = "This account does not have admin access.";
       return;
     }
+
+    viewer = sessionData.user;
 
     await loadUsers();
     await loadDigestStatus();
@@ -56,9 +59,11 @@ function renderUsers(users) {
     .forEach((user) => {
       const card = document.createElement("article");
       card.className = "admin-user-card";
+      const role = user.isOwner ? "Main admin" : user.coAdmin ? "Co-admin" : "";
+      const isSelf = viewer && user.username === viewer.username;
       card.innerHTML = `
         <div class="admin-user-header">
-          <h3>${escapeHtml(user.username)}${user.isAdmin ? " (admin)" : ""}</h3>
+          <h3>${escapeHtml(user.username)}${role ? ` <span class="role-badge role-badge--${user.isOwner ? "owner" : "co"}">${role}</span>` : ""}${isSelf ? ' <span class="admin-you">(you)</span>' : ""}</h3>
           <span>${user.favoriteCount} ${user.favoriteCount === 1 ? "favorite" : "favorites"}</span>
         </div>
         <div class="admin-user-meta">
@@ -72,7 +77,22 @@ function renderUsers(users) {
 
       const actions = card.querySelector(".admin-user-actions");
 
-      if (!user.isAdmin) {
+      // Co-admin checkbox: only the main admin can change it; the main admin account itself has none.
+      if (!user.isOwner) {
+        const label = document.createElement("label");
+        label.className = "coadmin-toggle";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = Boolean(user.coAdmin);
+        checkbox.disabled = !viewer?.isOwner;
+        label.title = viewer?.isOwner ? "Co-admins have the same admin rights, but cannot add or remove co-admins." : "Only the main admin can add or remove co-admins.";
+        label.append(checkbox, document.createTextNode(" Co-admin"));
+        checkbox.addEventListener("change", () => setCoAdmin(user.username, checkbox));
+        actions.appendChild(label);
+      }
+
+      // Delete: never for the main admin or yourself; co-admin accounts only by the main admin.
+      if (!user.isOwner && !isSelf && (!user.coAdmin || viewer?.isOwner)) {
         const deleteButton = document.createElement("button");
         deleteButton.type = "button";
         deleteButton.className = "danger-button";
@@ -83,6 +103,31 @@ function renderUsers(users) {
 
       adminUsers.appendChild(card);
     });
+}
+
+async function setCoAdmin(username, checkbox) {
+  checkbox.disabled = true;
+  adminStatus.textContent = `${checkbox.checked ? "Making" : "Removing"} ${username} ${checkbox.checked ? "a co-admin" : "as co-admin"}...`;
+
+  try {
+    const response = await fetch(`/api/admin/users/${encodeURIComponent(username)}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ coAdmin: checkbox.checked })
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "Could not change co-admin rights.");
+    }
+
+    await loadUsers();
+    adminStatus.textContent = data.user.coAdmin ? `${username} is now a co-admin.` : `${username} is no longer a co-admin.`;
+  } catch (error) {
+    checkbox.checked = !checkbox.checked;
+    checkbox.disabled = false;
+    adminStatus.textContent = error.message;
+  }
 }
 
 async function deleteUser(username, button) {
