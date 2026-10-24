@@ -3,17 +3,17 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Daily AstroPH Admin</title>
+    <title>Daily AstroPH Admin Tools</title>
     <link rel="stylesheet" href="/styles.css">
     <script src="/theme.js"></script>
   </head>
   <body>
-    <main class="app-shell admin-shell">
+    <main class="app-shell admin-shell admin-wide">
       <section class="topbar" aria-label="Admin controls">
         <div class="admin-toolbar">
           <div>
-            <p class="eyebrow">local admin</p>
-            <h1>Members</h1>
+            <p class="eyebrow">Daily AstroPH</p>
+            <h1>Admin Tools</h1>
           </div>
           <div class="admin-toolbar-actions">
           <button class="icon-btn theme-toggle" type="button" title="Toggle dark mode" aria-label="Toggle dark mode">
@@ -23,11 +23,11 @@
             <a class="admin-back-link" href="/">Back to Daily AstroPH</a>
           </div>
         </div>
-        <div id="adminStatus" class="auth-status">Loading members...</div>
+        <div id="adminStatus" class="auth-status">Loading…</div>
       </section>
 
       <section id="adminDigest" class="profile-card admin-digest" hidden>
-        <h2>Email digest</h2>
+        <h2>Email Digest</h2>
         <div id="digestStatus" class="admin-digest-status">Loading…</div>
         <p class="profile-help">Preview builds your own digest from the current arXiv data without sending it. "Send test" emails it to the address on your profile, with a note at the top that it is a test. Neither affects the regular 7 am schedule.</p>
         <div class="admin-digest-actions">
@@ -42,7 +42,7 @@
 
       <section id="adminArxiv" class="profile-card admin-arxiv" hidden>
         <div class="admin-arxiv-head">
-          <h2>arXiv requests</h2>
+          <h2>ArXiv Requests</h2>
           <div class="range-switch" role="group" aria-label="Time range">
             <button type="button" class="btn btn-small" data-range="2">2 days</button>
             <button type="button" class="btn btn-small" data-range="7">7 days</button>
@@ -60,7 +60,34 @@
         </details>
       </section>
 
-      <section id="adminUsers" class="admin-users" aria-live="polite"></section>
+      <section id="adminMembers" class="profile-card admin-members" hidden>
+        <div class="admin-arxiv-head">
+          <h2>Member List</h2>
+          <span id="memberCount" class="member-count"></span>
+        </div>
+        <label class="search-box member-search">
+          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="9" cy="9" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M13.2 13.2L17 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <input id="memberSearch" type="search" placeholder="Search username, name, email or ORCID…" aria-label="Search members">
+        </label>
+        <div class="table-scroll">
+          <table class="member-table">
+            <thead>
+              <tr>
+                <th><button type="button" class="sort-button" data-sort="username">Username</button></th>
+                <th><button type="button" class="sort-button" data-sort="fullName">Full name</button></th>
+                <th>ORCID</th>
+                <th><button type="button" class="sort-button" data-sort="email">Email</button></th>
+                <th><button type="button" class="sort-button" data-sort="digest">Digest</button></th>
+                <th class="num"><button type="button" class="sort-button" data-sort="favoriteCount">Favorites</button></th>
+                <th><button type="button" class="sort-button" data-sort="createdAt">Created</button></th>
+                <th class="center"><button type="button" class="sort-button" data-sort="coAdmin">Co-admin</button></th>
+                <th class="center">Delete</th>
+              </tr>
+            </thead>
+            <tbody id="adminUsers" aria-live="polite"></tbody>
+          </table>
+        </div>
+      </section>
     </main>
 
     <script src="/admin.js" type="module"></script>

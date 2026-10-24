@@ -30,7 +30,7 @@ async function init() {
 }
 
 async function loadUsers() {
-  adminStatus.textContent = "Loading members...";
+  adminStatus.textContent = "Loading…";
 
   try {
     const response = await fetch("/api/admin/users");
@@ -46,64 +46,122 @@ async function loadUsers() {
   }
 }
 
-function renderUsers(users) {
-  adminUsers.innerHTML = "";
-  adminStatus.textContent = `${users.length} ${users.length === 1 ? "member" : "members"} found.`;
+// ===== Member list (searchable, sortable table) =====
+const adminMembers = document.querySelector("#adminMembers");
+const memberSearch = document.querySelector("#memberSearch");
+const memberCount = document.querySelector("#memberCount");
+let allMembers = [];
+let memberSort = { key: "username", direction: 1 };
 
-  if (!users.length) {
-    adminUsers.innerHTML = `<div class="empty">No member accounts exist yet.</div>`;
+memberSearch.addEventListener("input", renderMemberRows);
+adminMembers.querySelectorAll(".sort-button").forEach((button) => {
+  button.addEventListener("click", () => {
+    const key = button.dataset.sort;
+    memberSort = { key, direction: memberSort.key === key ? -memberSort.direction : 1 };
+    renderMemberRows();
+  });
+});
+
+function renderUsers(users) {
+  allMembers = users;
+  adminMembers.hidden = false;
+  adminStatus.textContent = "";
+  renderMemberRows();
+}
+
+function memberRole(user) {
+  return user.isOwner ? 2 : user.coAdmin ? 1 : 0;
+}
+
+function sortValue(user, key) {
+  switch (key) {
+    case "coAdmin": return memberRole(user);
+    case "createdAt": return Date.parse(user.createdAt) || 0;
+    case "favoriteCount": return Number(user.favoriteCount) || 0;
+    case "digest": return { daily: 2, weekly: 1 }[user.digest] || 0;
+    default: return String(user[key] || "").toLowerCase();
+  }
+}
+
+function renderMemberRows() {
+  const query = memberSearch.value.trim().toLowerCase();
+  const rows = allMembers
+    .filter((user) => !query || [user.username, user.fullName, user.email, user.orcid].some((value) => String(value || "").toLowerCase().includes(query)))
+    .sort((left, right) => {
+      const a = sortValue(left, memberSort.key);
+      const b = sortValue(right, memberSort.key);
+      // Empty text values always go last.
+      if (a === "" && b !== "") return 1;
+      if (b === "" && a !== "") return -1;
+      return (a < b ? -1 : a > b ? 1 : 0) * memberSort.direction || left.username.localeCompare(right.username);
+    });
+
+  memberCount.textContent = query ? `${rows.length} of ${allMembers.length} members` : `${allMembers.length} ${allMembers.length === 1 ? "member" : "members"}`;
+  adminMembers.querySelectorAll(".sort-button").forEach((button) => {
+    const active = button.dataset.sort === memberSort.key;
+    button.classList.toggle("is-sorted", active);
+    button.dataset.direction = active ? (memberSort.direction > 0 ? "asc" : "desc") : "";
+    button.closest("th").setAttribute("aria-sort", active ? (memberSort.direction > 0 ? "ascending" : "descending") : "none");
+  });
+
+  adminUsers.innerHTML = "";
+
+  if (!rows.length) {
+    adminUsers.innerHTML = `<tr><td colspan="9" class="member-empty">${allMembers.length ? "No members match your search." : "No member accounts exist yet."}</td></tr>`;
     return;
   }
 
-  users
-    .sort((left, right) => left.username.localeCompare(right.username))
-    .forEach((user) => {
-      const card = document.createElement("article");
-      card.className = "admin-user-card";
-      const role = user.isOwner ? "Main admin" : user.coAdmin ? "Co-admin" : "";
-      const isSelf = viewer && user.username === viewer.username;
-      card.innerHTML = `
-        <div class="admin-user-header">
-          <h3>${escapeHtml(user.username)}${role ? ` <span class="role-badge role-badge--${user.isOwner ? "owner" : "co"}">${role}</span>` : ""}${isSelf ? ' <span class="admin-you">(you)</span>' : ""}</h3>
-          <span>${user.favoriteCount} ${user.favoriteCount === 1 ? "favorite" : "favorites"}</span>
-        </div>
-        <div class="admin-user-meta">
-          <span>Full name: ${escapeHtml(user.fullName || "Not set")}</span>
-          <span>ORCID: ${escapeHtml(user.orcid || "Not set")}</span>
-          <span>Digest: ${escapeHtml(user.digest && user.digest !== "off" ? `${user.digest} → ${user.email}` : "off")}</span>
-          <span>Created: ${escapeHtml(formatDate(user.createdAt))}</span>
-        </div>
-        <div class="admin-user-actions"></div>
-      `;
+  rows.forEach((user) => {
+    const isSelf = viewer && user.username === viewer.username;
+    const row = document.createElement("tr");
+    const digest = user.digest && user.digest !== "off"
+      ? `<span class="digest-pill">${escapeHtml(user.digest)}</span>`
+      : `<span class="muted">off</span>`;
+    const email = user.email
+      ? `<a href="mailto:${encodeURIComponent(user.email)}">${escapeHtml(user.email)}</a>`
+      : '<span class="muted">—</span>';
+    row.innerHTML = `
+      <td><strong>${escapeHtml(user.username)}</strong>${user.isOwner ? ' <span class="role-badge role-badge--owner">Main admin</span>' : ""}${isSelf ? ' <span class="admin-you">(you)</span>' : ""}</td>
+      <td>${user.fullName ? escapeHtml(user.fullName) : '<span class="muted">—</span>'}</td>
+      <td class="nowrap">${user.orcid ? `<a href="https://orcid.org/${encodeURIComponent(user.orcid)}" target="_blank" rel="noreferrer">${escapeHtml(user.orcid)}</a>` : '<span class="muted">—</span>'}</td>
+      <td>${email}</td>
+      <td>${digest}</td>
+      <td class="num">${Number(user.favoriteCount) || 0}</td>
+      <td class="nowrap">${escapeHtml(formatDate(user.createdAt))}</td>
+      <td class="center"></td>
+      <td class="center"></td>
+    `;
 
-      const actions = card.querySelector(".admin-user-actions");
+    const [coAdminCell, deleteCell] = row.querySelectorAll("td.center");
 
-      // Co-admin checkbox: only the main admin can change it; the main admin account itself has none.
-      if (!user.isOwner) {
-        const label = document.createElement("label");
-        label.className = "coadmin-toggle";
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.checked = Boolean(user.coAdmin);
-        checkbox.disabled = !viewer?.isOwner;
-        label.title = viewer?.isOwner ? "Co-admins have the same admin rights, but cannot add or remove co-admins." : "Only the main admin can add or remove co-admins.";
-        label.append(checkbox, document.createTextNode(" Co-admin"));
-        checkbox.addEventListener("change", () => setCoAdmin(user.username, checkbox));
-        actions.appendChild(label);
-      }
+    // Co-admin checkbox: only the main admin can change it; the main admin row has none.
+    if (!user.isOwner) {
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.className = "coadmin-checkbox";
+      checkbox.checked = Boolean(user.coAdmin);
+      checkbox.disabled = !viewer?.isOwner;
+      checkbox.title = viewer?.isOwner ? "Co-admins have the same admin rights, but cannot add or remove co-admins." : "Only the main admin can add or remove co-admins.";
+      checkbox.setAttribute("aria-label", `Co-admin: ${user.username}`);
+      checkbox.addEventListener("change", () => setCoAdmin(user.username, checkbox));
+      coAdminCell.appendChild(checkbox);
+    }
 
-      // Delete: never for the main admin or yourself; co-admin accounts only by the main admin.
-      if (!user.isOwner && !isSelf && (!user.coAdmin || viewer?.isOwner)) {
-        const deleteButton = document.createElement("button");
-        deleteButton.type = "button";
-        deleteButton.className = "danger-button";
-        deleteButton.textContent = "Delete account";
-        deleteButton.addEventListener("click", () => deleteUser(user.username, deleteButton));
-        actions.appendChild(deleteButton);
-      }
+    // Delete: never for the main admin or yourself; co-admin accounts only by the main admin.
+    if (!user.isOwner && !isSelf && (!user.coAdmin || viewer?.isOwner)) {
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "btn btn-small btn-danger-outline";
+      deleteButton.textContent = "Delete";
+      deleteButton.setAttribute("aria-label", `Delete ${user.username}`);
+      deleteButton.addEventListener("click", () => deleteUser(user.username, deleteButton));
+      deleteCell.appendChild(deleteButton);
+    } else {
+      deleteCell.innerHTML = '<span class="muted">—</span>';
+    }
 
-      adminUsers.appendChild(card);
-    });
+    adminUsers.appendChild(row);
+  });
 }
 
 async function setCoAdmin(username, checkbox) {

@@ -1675,3 +1675,43 @@ kbd {
 .arxiv-table th { color: var(--muted); font-size: 0.76rem; font-weight: 650; }
 .arxiv-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .arxiv-table td.warn { color: var(--danger); font-weight: 700; }
+
+/* ===== Admin: member list ===== */
+.member-count { color: var(--muted); font-size: 0.88rem; font-weight: 600; }
+.member-search input { min-height: 40px; }
+.member-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.member-table th, .member-table td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: middle; }
+.member-table tbody tr:hover { background: var(--surface-2); }
+.member-table th { color: var(--muted); font-size: 0.76rem; font-weight: 650; white-space: nowrap; }
+.member-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.member-table .center { text-align: center; }
+.member-table .nowrap { white-space: nowrap; }
+.member-table .muted { color: var(--muted); }
+.member-table a { color: var(--accent); text-decoration: none; }
+.member-table a:hover { text-decoration: underline; }
+.member-empty { color: var(--muted); text-align: center !important; padding: 18px !important; }
+
+.sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+.sort-button:hover { color: var(--ink); }
+.sort-button::after { content: "↕"; opacity: 0.35; font-size: 0.85em; }
+.sort-button.is-sorted { color: var(--accent); }
+.sort-button.is-sorted[data-direction="asc"]::after { content: "↑"; opacity: 1; }
+.sort-button.is-sorted[data-direction="desc"]::after { content: "↓"; opacity: 1; }
+.num .sort-button { flex-direction: row-reverse; }
+
+.coadmin-checkbox { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
+.coadmin-checkbox:disabled { cursor: not-allowed; }
+.digest-pill { border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 0.76rem; font-weight: 700; padding: 1px 8px; }
+.role-badge { display: inline-block; white-space: nowrap; }
+.member-table td:first-child { min-width: 140px; }
+.app-shell.admin-wide { width: min(1320px, calc(100% - 32px)); }
