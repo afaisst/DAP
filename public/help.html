@@ -40,13 +40,15 @@
           <a href="#account">Account &amp; login</a>
           <a href="#favorites">Favorites</a>
           <a href="#my-papers">My Papers &amp; author names</a>
+          <a href="#hide-authors">Hiding author names</a>
           <a href="#suggest">Suggesting papers</a>
           <a href="#learning">Thumbs up / down &amp; Most Interesting</a>
           <a href="#search">Searching all of arXiv</a>
           <a href="#benty">Voting on Benty Fields</a>
           <a href="#digest">Email digest</a>
           <a href="#profile">Profile page</a>
-          <a href="#appearance">Dark mode &amp; shortcuts</a>
+          <a href="#appearance">Header buttons, dark mode &amp; shortcuts</a>
+          <a href="#admin">For admins</a>
           <a href="#limits">Good to know</a>
         </nav>
       </aside>
@@ -55,7 +57,7 @@
         <section class="doc-intro">
           <p class="day-kicker">Documentation</p>
           <h1>How to use Daily AstroPH</h1>
-          <p>Daily AstroPH shows each day's new arXiv <strong>astro-ph</strong> submissions, sorted into science topics, and helps you keep track of the papers that matter to you: favorites, your own papers, papers colleagues suggest, and a personal "Most Interesting" list that learns from your thumbs-up votes.</p>
+          <p>Daily AstroPH shows each day's new arXiv <strong>astro-ph</strong> submissions, sorted into science topics, and helps you keep track of the papers that matter to you: favorites, your own papers, papers colleagues suggest, a personal "Most Interesting" list that learns from your thumbs-up votes, and an optional daily or weekly email digest. You can also search all of arXiv by author, author position, date, arXiv number and classification.</p>
         </section>
 
         <section id="daily" class="card doc-section">
@@ -121,6 +123,16 @@
           </ul>
         </section>
 
+        <section id="hide-authors" class="card doc-section">
+          <h2>Hiding author names</h2>
+          <ul>
+            <li>To judge papers by their title and abstract without being influenced by who wrote them, switch on <strong>Hide author names by default</strong> on the <a href="/profile.html">profile page</a> (under <em>Reading</em>) and press <em>Save profile</em>.</li>
+            <li>Paper cards then show <em>Authors hidden (N)</em> with a <strong>Reveal authors</strong> button. Revealing shows that one paper's authors; the others stay hidden.</li>
+            <li>This applies everywhere papers are listed: daily topics, Your library and arXiv search results. Revealed papers stay revealed until you reload the page.</li>
+            <li>The setting is saved with your account, so it works on every device you log in on. My Papers and the search box still find papers by author.</li>
+          </ul>
+        </section>
+
         <section id="suggest" class="card doc-section">
           <h2>Suggesting papers</h2>
           <ul>
@@ -169,8 +181,9 @@
             <li><strong>Daily:</strong> Monday–Friday at 7 am US Pacific, the 12 most interesting papers from the latest arXiv batch (announced the evening before).</li>
             <li><strong>Weekly:</strong> Mondays at 7 am US Pacific, the 30 most interesting papers from the previous week.</li>
             <li>Papers are ranked by your thumbs-up and thumbs-down votes, like the <em>Most Interesting</em> list, across all astro-ph classifications. If you haven't liked any paper yet, no digest is sent.</li>
-            <li>To stop the emails, set the digest to <strong>Off</strong>, or use the <strong>Unsubscribe</strong> link at the bottom of any digest (or your mail app's Unsubscribe button).</li>
-            <li>If the digest lands in your junk folder, mark it as "Not junk" and add the sender to your safe senders.</li>
+            <li>Each paper in the email shows its title, first authors, arXiv link and the keywords it matched.</li>
+            <li>To stop the emails, set the digest to <strong>Off</strong>, or use the <strong>Unsubscribe</strong> link at the bottom of any digest (it opens a page where you confirm with one click) or your mail app's own Unsubscribe button.</li>
+            <li><strong>Not receiving it?</strong> Some mail systems, especially university and Outlook/Microsoft 365 accounts, put the digest in the junk folder or hold it back. Add <strong>dailyastrojournal@gmail.com</strong> to your safe senders or contacts and mark the email as "Not junk" if it lands there. A Gmail address usually works best for receiving the digest.</li>
           </ul>
         </section>
 
@@ -178,13 +191,14 @@
           <h2>Profile page</h2>
           <p>Open it from the account menu (top right → <em>User profile</em>). It has three boxes:</p>
           <ul>
-            <li><strong>Profile settings:</strong> author details, author names for My Papers and the email digest. <em>Save profile</em> becomes active as soon as you change something and shows a green "✓ Profile saved" when done. <em>Delete account</em> is at the bottom of this box.</li>
+            <li><strong>Profile settings:</strong> author details, author names for My Papers, reading preferences (hide author names) and the email digest. <em>Save profile</em> becomes active as soon as you change something and shows a green "✓ Profile saved" when done. <em>Delete account</em> is at the bottom of this box.</li>
             <li><strong>Password:</strong> <em>Change password</em> becomes active once all three fields are filled and the new passwords match.</li>
             <li><strong>What you like:</strong> what the app learned from your thumbs up/down, with <em>Forget everything</em>.</li>
           </ul>
           <p>In short, you can:</p>
           <ul>
             <li>set your full name and ORCID, and the name variants used for <em>My Papers</em>;</li>
+            <li>hide author names by default;</li>
             <li>set your email address and daily/weekly digest;</li>
             <li>see and reset what the app learned from your thumbs up/down (<em>What you like</em>);</li>
             <li>change your password;</li>
@@ -193,10 +207,20 @@
         </section>
 
         <section id="appearance" class="card doc-section">
-          <h2>Dark mode &amp; shortcuts</h2>
+          <h2>Header buttons, dark mode &amp; shortcuts</h2>
           <ul>
+            <li>The buttons at the top right are, from left to right: <strong>?</strong> this help page, the <strong>magnifier</strong> for searching all of arXiv, the <strong>moon / sun</strong> for dark mode, and your <strong>account menu</strong> (log in, profile, admin, log out).</li>
             <li>The <strong>moon / sun</strong> button switches between light and dark mode. By default the page follows your computer's setting; your choice is remembered in this browser.</li>
             <li>Keyboard: <kbd>←</kbd> / <kbd>→</kbd> previous / next day, <kbd>/</kbd> jump to the search box.</li>
+          </ul>
+        </section>
+
+        <section id="admin" class="card doc-section">
+          <h2>For admins</h2>
+          <p>Admin accounts see an <strong>Admin</strong> link in the account menu. The admin page shows:</p>
+          <ul>
+            <li><strong>Email digest:</strong> whether sending is set up and scheduled, the number of daily and weekly subscribers, <em>Preview</em> buttons that show your own daily or weekly digest without sending it, and <em>Send test</em> buttons that email it to the address on your profile.</li>
+            <li><strong>Members:</strong> every account with its name, ORCID, digest setting and number of favorites, and a button to delete an account.</li>
           </ul>
         </section>
 

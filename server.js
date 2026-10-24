@@ -1491,6 +1491,10 @@ const server = http.createServer((req, res) => {
     return handleSearch(req, res);
   }
 
+  if (req.url?.startsWith("/api/digest-info")) {
+    return json(res, 200, { sender: process.env.GMAIL_USER || "" });
+  }
+
   if (req.url?.startsWith("/api/unsubscribe")) {
     return handleUnsubscribe(req, res);
   }

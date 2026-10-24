@@ -69,6 +69,7 @@ async function init() {
 
     profileStatus.textContent = `Signed in as ${sessionUser.username}.`;
     fillProfileForm(sessionUser);
+    loadDigestSender();
     await loadLikes();
   } catch (error) {
     profileStatus.textContent = `Could not load profile. ${error.message}`;
@@ -414,4 +415,18 @@ function confirmAction({ title, text, button }) {
     modal.showModal();
     modal.querySelector('button[value="cancel"]').focus();
   });
+}
+
+// Show the actual sending address (server setting GMAIL_USER) in the "safe senders" note.
+async function loadDigestSender() {
+  try {
+    const response = await fetch("/api/digest-info");
+    const data = await response.json();
+
+    if (response.ok && data.sender) {
+      document.querySelectorAll(".digest-sender").forEach((element) => { element.textContent = data.sender; });
+    }
+  } catch {
+    // Keep the default address shown in the page.
+  }
 }
