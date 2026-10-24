@@ -238,6 +238,7 @@ async function ensurePostgresSchema() {
         digest TEXT NOT NULL DEFAULT 'off',
         digest_last_sent JSONB NOT NULL DEFAULT '{}'::jsonb,
         hide_authors BOOLEAN NOT NULL DEFAULT FALSE,
+        last_seen_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )
     `).then(() => pool.query(`
@@ -248,7 +249,8 @@ async function ensurePostgresSchema() {
         ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT '',
         ADD COLUMN IF NOT EXISTS digest TEXT NOT NULL DEFAULT 'off',
         ADD COLUMN IF NOT EXISTS digest_last_sent JSONB NOT NULL DEFAULT '{}'::jsonb,
-        ADD COLUMN IF NOT EXISTS hide_authors BOOLEAN NOT NULL DEFAULT FALSE
+        ADD COLUMN IF NOT EXISTS hide_authors BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ
     `)));
   }
 
@@ -272,6 +274,7 @@ function rowToUser(row) {
     digest: row.digest || "off",
     digestLastSent: row.digest_last_sent && typeof row.digest_last_sent === "object" ? row.digest_last_sent : {},
     hideAuthors: Boolean(row.hide_authors),
+    lastSeenAt: row.last_seen_at instanceof Date ? row.last_seen_at.toISOString() : row.last_seen_at || "",
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at
   };
 }
@@ -381,9 +384,10 @@ async function writePostgresUserStore(store) {
             digest,
             digest_last_sent,
             hide_authors,
+            last_seen_at,
             created_at
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12, $13, $14::jsonb, $15, COALESCE($16::timestamptz, NOW()))
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12, $13, $14::jsonb, $15, $16::timestamptz, COALESCE($17::timestamptz, NOW()))
           ON CONFLICT (username_key) DO UPDATE SET
             username = EXCLUDED.username,
             password_salt = EXCLUDED.password_salt,
@@ -398,7 +402,8 @@ async function writePostgresUserStore(store) {
             email = EXCLUDED.email,
             digest = EXCLUDED.digest,
             digest_last_sent = EXCLUDED.digest_last_sent,
-            hide_authors = EXCLUDED.hide_authors
+            hide_authors = EXCLUDED.hide_authors,
+            last_seen_at = EXCLUDED.last_seen_at
         `, [
           user.username,
           user.usernameKey,
@@ -415,6 +420,7 @@ async function writePostgresUserStore(store) {
           user.digest || "off",
           JSON.stringify(user.digestLastSent && typeof user.digestLastSent === "object" ? user.digestLastSent : {}),
           Boolean(user.hideAuthors),
+          user.lastSeenAt || null,
           user.createdAt || null
         ]);
       }
@@ -567,6 +573,24 @@ async function getUserFromSession(req, res) {
   return { session, store, user };
 }
 
+// Last visit: the last day the user opened the app while logged in (or logged in). Saved at most
+// once per user per day (UTC), so normal page loads don't cause database writes.
+async function touchLastSeen(store, user) {
+  const now = new Date().toISOString();
+
+  if ((user.lastSeenAt || "").slice(0, 10) === now.slice(0, 10)) {
+    return;
+  }
+
+  user.lastSeenAt = now;
+
+  try {
+    await writeUserStore(store);
+  } catch (error) {
+    console.warn(`Could not record last visit for ${user.username}: ${error.message}`);
+  }
+}
+
 async function handleSession(req, res) {
   const session = getSession(req);
 
@@ -583,6 +607,7 @@ async function handleSession(req, res) {
     return json(res, 200, { user: null });
   }
 
+  await touchLastSeen(store, user);
   return json(res, 200, { user: serializeUser(user) });
 }
 
@@ -625,7 +650,8 @@ async function handleSignup(req, res) {
     nameAliases: [],
     suggestions: [],
     liked: [],
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    lastSeenAt: new Date().toISOString()
   });
   await writeUserStore(store);
 
@@ -656,6 +682,7 @@ async function handleLogin(req, res) {
 
   const token = createSessionCookie(user.username);
   setCookie(res, sessionCookieName, token, { maxAge: sessionMaxAgeSeconds });
+  await touchLastSeen(store, user);
   return json(res, 200, { user: serializeUser(user) });
 }
 
@@ -1183,6 +1210,7 @@ async function handleAdminUsers(req, res) {
       users: auth.store.users.map((user) => ({
         ...serializeUser(user),
         favoriteCount: Array.isArray(user.favorites) ? user.favorites.length : 0,
+        lastSeenAt: user.lastSeenAt || "",
         createdAt: user.createdAt || ""
       }))
     });

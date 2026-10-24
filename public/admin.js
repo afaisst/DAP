@@ -69,6 +69,22 @@ function renderUsers(users) {
   renderMemberRows();
 }
 
+// "today", "yesterday", "12 days ago" + the date as tooltip; long-unused accounts are highlighted.
+function lastVisit(value) {
+  const time = Date.parse(value);
+
+  if (!time) {
+    return '<span class="muted" title="No visit recorded since this was added">—</span>';
+  }
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const days = Math.max(0, Math.ceil((startOfToday.getTime() - time) / 86400000));
+  const label = days === 0 ? "today" : days === 1 ? "yesterday" : days < 60 ? `${days} days ago` : formatDate(value);
+  const stale = days >= 180 ? " last-visit--stale" : "";
+  return `<span class="last-visit${stale}" title="${escapeHtml(formatDate(value))}">${escapeHtml(label)}</span>`;
+}
+
 function memberRole(user) {
   return user.isOwner ? 2 : user.coAdmin ? 1 : 0;
 }
@@ -77,6 +93,7 @@ function sortValue(user, key) {
   switch (key) {
     case "coAdmin": return memberRole(user);
     case "createdAt": return Date.parse(user.createdAt) || 0;
+    case "lastSeenAt": return Date.parse(user.lastSeenAt) || 0;
     case "favoriteCount": return Number(user.favoriteCount) || 0;
     case "digest": return { daily: 2, weekly: 1 }[user.digest] || 0;
     default: return String(user[key] || "").toLowerCase();
@@ -107,7 +124,7 @@ function renderMemberRows() {
   adminUsers.innerHTML = "";
 
   if (!rows.length) {
-    adminUsers.innerHTML = `<tr><td colspan="9" class="member-empty">${allMembers.length ? "No members match your search." : "No member accounts exist yet."}</td></tr>`;
+    adminUsers.innerHTML = `<tr><td colspan="10" class="member-empty">${allMembers.length ? "No members match your search." : "No member accounts exist yet."}</td></tr>`;
     return;
   }
 
@@ -128,6 +145,7 @@ function renderMemberRows() {
       <td>${digest}</td>
       <td class="num">${Number(user.favoriteCount) || 0}</td>
       <td class="nowrap">${escapeHtml(formatDate(user.createdAt))}</td>
+      <td class="nowrap">${lastVisit(user.lastSeenAt)}</td>
       <td class="center"></td>
       <td class="center"></td>
     `;

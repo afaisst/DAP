@@ -1715,3 +1715,4 @@ kbd {
 .role-badge { display: inline-block; white-space: nowrap; }
 .member-table td:first-child { min-width: 140px; }
 .app-shell.admin-wide { width: min(1320px, calc(100% - 32px)); }
+.last-visit--stale { color: var(--warn); font-weight: 650; }
